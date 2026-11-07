@@ -11,14 +11,14 @@ Full rationale: `docs/research/04-company-blogs.md` § Data collection protocol.
 | plug_usb | `~/hackathon_data/hc-plug` | `plug the new usb cable into the rack` |
 | full run (5–10 eps) | `~/hackathon_data/hc-full` | `unplug the usb, open and close the rack back panel, and plug in the new usb` |
 
-_TODO(event): if the rules' wording differs, rewrite these strings once at 08:30 and freeze them. They must match `hillclimb/config.yaml`._
+_TODO(event): if the rules' wording or the prompt search (`docs/PROMPTS.md`, 10:25) picks different strings, rewrite them once before demo sprint 1 (10:40) and freeze them. They must match `hillclimb/config.yaml` (subtasks) and `FULL_TASK` in `tools/ft.py` (full run)._
 
 ```bash
 # laptop
 ssh -L 8080:localhost:8080 <user>@<station>
 # station
 tmux new -A -s collect
-cd ~/physical-ai-hacks
+cd ~/physical-ai-hacks        # or ~/physical-ai-hack-2026: wherever the kit is checked out
 uv run dhk-collect --config configs/station.yaml --dataset-dir ~/hackathon_data/hc-plug --task "plug the new usb cable into the rack"
 ```
 Quest: **grip** = drive that arm (works like a clutch: release it, re-center your hand, grip again) · **trigger** = close gripper · **A** = start/save · **B** = discard · **right stick click** = arms back to start (not while recording). Keep your head still and facing the arms.
@@ -27,9 +27,9 @@ Quest: **grip** = drive that arm (works like a clutch: release it, re-center you
 1. Write the **canonical strategy** for each subtask below in one line, and get all operators to agree. One operator does ~70% of the demos.
 2. Check feasibility: can the gripper pinch the USB plug body next to the other cables? Can it reach the panel latch or edge?
 3. Photograph the camera mounts and the rack position (we restore them after other teams' slots).
-4. Run zero-shot on each subtask, 3–5 tries each: `dreamcli robot run --task "<string>" --dry-run`, then live with a hand on the e-stop. Log results in `evals/zero-shot.md`. Weight the demo budget toward the worst subtask.
+4. Zero-shot baseline (on-arm, hand on the e-stop): RUNBOOK § 10:10, through the harness with `--judge confirm`. Results go in `evals/zero-shot.md`. Weight the demo budget toward the worst subtask.
 
-## Canonical strategies (fill in at 08:30 when we see the rig)
+## Canonical strategies (fill in at bring-up, 10:00–10:40, before demo sprint 1)
 - **unplug_usb:** _which arm grips the plug body, how it pulls (straight out along the port axis), where it drops the cable_
 - **open_backing:** _which arm, grip point, motion (hinge arc / slide), how far open = "open"_
 - **close_backing:** _which arm, push point, until fully latched_
@@ -51,7 +51,7 @@ Quest: **grip** = drive that arm (works like a clutch: release it, re-center you
 - **Diversity recipe:** vary the object's start pose within a **3–6 cm radius** of a nominal pose and keep the goal (port) fixed. That is enough that the policy can't memorise one path, and small enough for ~60 demos to cover.
 - **Recovery ratio:** **1:1 expert : recovery**, with recovery episodes allocated by phase **in proportion to the failures logged in autonomous rollouts** (logs → `tools/report.py`). Record from the start of the subtask, through the induced failure, to success.
 
-## Budget (slot 1, before FT#1 at ~12:30)
+## Budget (slot 1, before FT#1 at ≤13:30)
 plug_usb **50–60** · open_backing **40** · unplug_usb **20** · close_backing **25** · full **5**
 _(Re-weight from the zero-shot results.)_
 
@@ -63,7 +63,7 @@ _(Re-weight from the zero-shot results.)_
   - panel ajar or half-closed → re-grip and finish
   - plug still partly in the port after a weak pull → re-grip and pull straight
 - **Precision-phase demos (~10):** start the episode already hovering 2–3 cm in front of the port, then insert.
-- Pull the harness's logged failure states (`runs/`) and recreate the most common ones first.
+- Pull the harness's logged failure states (`logs/harness/<run>/attempts.jsonl`, `tools/report.py logs/harness`) and recreate the most common ones first.
 
 ## Hand-off to fine-tune (curator)
 Rehearsed offline end to end: `docs/research/09-pipeline-rehearsal.md`. **Never `mv` the -eef folders**: a later `add_eef --replace` then rebuilds beside the source, and the parent silently keeps the old copy (Dream's check still passes).
@@ -78,4 +78,8 @@ tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft1      # ends with ft.
 # Use OUR launcher (keeps lr_schedule=constant so FT#2 can resume_from FT#1). It re-checks for stale sessions first.
 ~/dream-env/bin/python tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000
 ```
-FT#2: `tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft2 --self` (demos + harvested `self/hc-*-self`), then `ft.py launch ~/hackathon_data/hc-ft2 --name hc-ft2 --suffix hc-ft2 --steps 500 --resume-from <FT#1 model>`. Keep recording into the same `hc-<subtask>` folders; never edit `hc-ft1/` (it is the record of what FT#1 trained on).
+FT#2 (queue ≤21:30): harvest `~/dream-env/bin/python tools/harvest.py logs/harness/2026* --out ~/hackathon_data/self --retime-fps 30`, then `tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft2 --self` (demos + harvested `self/hc-*-self`), then
+- FT#1 landed and passes a quick check: `ft.py launch ~/hackathon_data/hc-ft2 --name hc-ft2 --suffix hc-ft2 --steps 500 --resume-from dream-1-ft:<uid8>-hc-ft1`.
+- FT#1 not landed yet: same, but `--steps 1000` and no `--resume-from` (fresh from base on ALL data). Don't wait for FT#1.
+
+Keep recording into the same `hc-<subtask>` folders; never edit `hc-ft1/` (it is the record of what FT#1 trained on).

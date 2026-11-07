@@ -167,3 +167,16 @@ class ConfirmJudge:
                                        "frames": {k: str(p) for k, p in frames.items()}})
         return Verdict(human, 1.0 if human else 0.0, f"operator override (judge: {shown}; {v.reason[:120]})",
                        source="human")
+
+
+class FakeJudge:
+    """Offline judge for `--backend fake`: no network, no cost. Fails each subtask's first attempt, passes the rest."""
+
+    def __init__(self) -> None:
+        self.seen: dict[str, int] = {}
+
+    def __call__(self, subtask, frames, proprio) -> Verdict:
+        if not proprio and not frames:
+            return Verdict(None, source="fake")
+        n = self.seen[subtask["name"]] = self.seen.get(subtask["name"], 0) + (1 if proprio is not None else 0)
+        return Verdict(n >= 2, 1.0 if n >= 2 else 0.0, "fake judge", source="fake")

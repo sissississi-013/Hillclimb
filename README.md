@@ -5,11 +5,11 @@ Goal: **1st on the leaderboard.**
 
 ## Start here (humans and agents), in this order
 1. `docs/PLAYBOOK.md` — **the plan**: TL;DR, timeline, fine-tune gotchas, harness, our edge, organizer questions
-2. `docs/RUNBOOK.md` — exact commands for the first 90 minutes at the station
+2. `docs/RUNBOOK.md` — exact commands from bring-up (10:00) to queueing FT#1 (≤13:30)
 3. `docs/DEMO-PROTOCOL.md` — operator card: frozen task strings, Quest controls, demo budget, recovery demos
-4. `docs/PROMPTS.md` — zero-shot prompt search at 08:35
-5. `context/` — `luma-event.md` (full event page), `task-brief.md`; add `rules.md` as soon as the rules drop
-6. `docs/research/` — 01 sponsors/Dream-1 · 02 arXiv · 03 GitHub · 04 company blogs · 05 Dream client API · 06 harvest · 07 judge eval · 08 code review
+4. `docs/PROMPTS.md` — zero-shot prompt search at 10:25
+5. `context/` — `schedule.md` (official times: these win), `luma-event.md` (full event page), `task-brief.md`; add `rules.md` as soon as the rules drop
+6. `docs/research/` — 01 sponsors/Dream-1 · 02 arXiv · 03 GitHub · 04 company blogs · 05 Dream client API · 06 harvest · 07 judge eval · 08 code review · 09 FT pipeline rehearsal
 7. Coordination: **issue #1**. Post `CLAIM:` / `DONE:` / `PLAN-CHANGE:` / `NEEDS-HUMAN:` there.
 
 ## Code
@@ -26,13 +26,15 @@ Goal: **1st on the leaderboard.**
 | `tools/report.py` | success tables per subtask × checkpoint × prompt (Wilson CIs) |
 | `tools/judge_eval.py` | measure judge accuracy / false-success rate on labelled frames |
 | `tools/waypoints.py` | extract/record waypoints for replay primitives |
+| `tools/rehearse_pipeline.sh` | add_eef every `hc-*` folder into one FT parent + `ft.py check` (free, never uploads) |
 | `tools/api_check.sh` | verify our code against the station's installed Dream library |
 
 ```bash
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python pyyaml numpy pyarrow pytest
 .venv/bin/python -m pytest -q          # no hardware needed
-python -m hillclimb.harness --backend fake
+.venv/bin/python -m hillclimb.harness --backend fake   # laptop. On the station use ~/dream-env/bin/python (RUNBOOK)
 ```
+`--backend fake` uses an offline fake judge by default (no network, no cost). Add `--judge vlm` to exercise the real Fireworks judge, which makes paid calls and needs real JPEGs.
 **Safety:** anything that moves an arm needs `HILLCLIMB_ALLOW_ARMS=1` and is run by a human with a hand on the e-stop.
 
 ## Branches

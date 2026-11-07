@@ -3,7 +3,7 @@
 # MUST match docs/DEMO-PROTOCOL.md task strings verbatim (tests/test_harness.py checks this).
 station_file: ~/.dreamlabs/station.yaml   # --backend client reads arms/cameras/caps from it. TODO(event): confirm
 station_url: http://127.0.0.1:8091     # `dreamcli robot up` API (robots/station.py:97). Station-local only.
-checkpoint: null                        # null = the station file's model. TODO(event): base id from get_models(), else dream-1-ft:...
+checkpoint: null                        # null = whatever the station last ran (RUNBOOK); pass --checkpoint for A/B. TODO(event): base id from get_models(), else dream-1-ft:...
 poll_s: 0.5
 total_time_s: 600                       # TODO(event): scored-attempt time limit from the rules
 

@@ -8,7 +8,7 @@
 ```bash
 HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend station --only plug_usb --attempts 1 \
     --prompt "Plug the USB cable into the empty port on the rack"
-python tools/report.py logs/harness --since 08:30      # the prompt is logged per attempt
+python tools/report.py logs/harness --since 10:25      # the prompt is logged per attempt
 ```
 Budget: ~20 min of arm time total. Spend it on the two weakest subtasks: **plug_usb** and **open_backing**. Pick the winner by progress seen on video, not only binary success. Zero-shot success will be low everywhere. Replace the `<colour>`/`<side>` placeholders below with what's on the rig.
 

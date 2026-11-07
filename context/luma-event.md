@@ -1,7 +1,7 @@
 # MakerMods Physical AI Hackathon — Luma page (verbatim capture)
 
 - Source: https://luma.com/pah?tk=cP6XSU (captured 2026-11-07 03:20 PST)
-- Dates: Sat Nov 7, 8:00 AM – Sun Nov 8, 7:00 PM PST
+- Dates: Sat Nov 7, 8:00 AM – Sun Nov 8, 7:00 PM PST (stale: the official times are in `schedule.md`, kickoff 9:00 AM)
 - Location: Founders, Inc. | San Francisco Lab, 2 Marina Blvd B300, San Francisco, CA 94123 — Building C, Third Floor
 - Presented by: Founders, Inc. Events (@fdotinc)
 - Hosted by: MakerMods Robotics (@makermodsai), Founders, Inc., David Chen (@chenosaurus), Dream Labs (@dreamlabs_ai)

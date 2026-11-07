@@ -7,7 +7,7 @@ Data-center server-rack manipulation, long horizon:
 3. Close the backing
 4. Connect a new USB cable into the rack
 
-Exact setup / scoring rules TBD — organizers will publish "before the event". **Update this file the moment rules drop.**
+Exact setup / scoring rules TBD — organizers will publish "before the event". **The moment rules drop, write them to `context/rules.md`** (README).
 
 ## Stack we'll have
 - MakerMods bimanual 6-axis "Metal Arm" stations (shared, booked time slots)
@@ -25,4 +25,4 @@ Exact setup / scoring rules TBD — organizers will publish "before the event". 
 
 ## Team
 - Sissi (sissississi-013), Ian (ianalin123), more joining.
-- Agent coordination: GitHub issue "Agent coordination board" in this repo.
+- Agent coordination: GitHub issue #1 "Agent coordination board" in this repo.

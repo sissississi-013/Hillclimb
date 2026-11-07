@@ -18,13 +18,13 @@ _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 |---|---|---|
 | **09:00** | everyone, **on time** | Kickoff: rules + scoring → `context/rules.md`. Ask the organizer questions (below). |
 | 09:10–09:50 | split | Quick-starts (arms, Dream-1 API). Declare the **Hill Climb** track at 09:50. |
-| **10:00 sharp** | 1 person | **Book stations the moment booking opens: as many early slots as allowed**, plus a Sat-evening slot (eval FT#1) and Sun 10:00–14:30 slots. |
+| **10:00 sharp** | curator | **Book stations the moment booking opens: as many early slots as allowed**, plus a Sat-evening slot (eval FT#1) and Sun 10:00–14:30 slots. |
 | 10:00–10:40 | harness lead + operator | Bring-up (RUNBOOK), zero-shot baseline with `--judge confirm`, prompt search, freeze prompts. |
 | 10:40–13:15 | 2 operators + curator | **Data sprint 1** (DEMO-PROTOCOL budget). The curator QA's live. |
-| **≤13:30** | curator (+ Sissi's OK) | `rehearse_pipeline.sh --parent hc-ft1` → `ft.py launch` **FT#1** (1000 steps, constant LR, base_share 0.5) → ready **~21:00–22:00**. |
+| **≤13:30** | curator (+ Sissi's OK) | `tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft1` → `tools/ft.py launch` **FT#1** (1000 steps, constant LR, base_share 0.5) → ready **~21:00–22:00**. |
 | 13:30–21:30 | harness team | Tune the harness on the **base** model: judge `scene` notes + judge_eval, retries, recovery, `pre:` primitives, horizons. Every run is logged (rollouts on). |
 | 13:30–21:30 | operators | Recovery demos from logged failure states (1:1 with expert), precision-phase plug demos, harvest judged successes. |
-| **≤21:30** | curator | **Queue FT#2 before the venue closes.** If FT#1 is done and passes a quick check: `--resume-from FT#1 --steps 500`. **Otherwise launch FT#2 from base on ALL data (1000 steps).** No waiting on FT#1. Ready Sun ~05:00–07:00. |
+| **≤21:30** | curator | **Queue FT#2 before the venue closes** (commands: DEMO-PROTOCOL § Hand-off). If FT#1 is done and passes a quick check: `--resume-from FT#1 --steps 500`. **Otherwise launch FT#2 from base on ALL data (1000 steps).** No waiting on FT#1. Ready Sun ~05:00–07:00. |
 | Sun 10:00–14:30 | all | A/B base / FT#1 / FT#2 per subtask (`report.py`), pick per-subtask checkpoints, harness polish, many full runs. Freeze config by 14:30. |
 | **Sun 15:00** | — | Submission due. Live scored attempts. |
 
@@ -64,9 +64,9 @@ for subtask in [unplug_usb, open_backing, close_backing, plug_usb]:
 - **Judge:** the VLM (Fireworks) first describes the scene, then scores it against a **frozen rubric per subtask**. Rewording the prompt can flip the verdict (2609.05401). Use 2+ camera views (overhead + the active wrist). Add a cheap second signal: gripper width or stall shows whether the cable is held, and a joint-current spike shows whether the plug seated.
 - **Policy escalation:** for each subtask, pick whichever model (base, FT#1, FT#2) or scripted primitive scores best on our own test runs. Selection is decided by real runs, not training loss (1X).
 - **Scripted fallback (if the rules allow):** a small spiral or wiggle plus press for the last few mm of USB insertion. Use `metal-arm-harness`'s `tip`/`nudge`.
-- Code: `hillclimb/` — `python -m hillclimb.harness --backend fake|dry-run|station [--only plug_usb]`. The station backend drives `dreamcli robot up`'s local API (127.0.0.1:8091) and needs `HILLCLIMB_ALLOW_ARMS=1`; a human runs it with a hand on the e-stop. Logs go to `logs/harness/<run>/attempts.jsonl`.
+- Code: `hillclimb/` — `python -m hillclimb.harness --backend fake|dry-run|station|client [--only plug_usb]`. The station backend drives `dreamcli robot up`'s local API (127.0.0.1:8091) and needs `HILLCLIMB_ALLOW_ARMS=1`; a human runs it with a hand on the e-stop. Logs go to `logs/harness/<run>/attempts.jsonl`.
 - `home` recovery opens the grippers, so plug_usb retries from where it is (`recovery: none`).
-- Questions to add for 08:00: may scored runs use `dreamcli robot up` + our harness? Is `rollouts: enabled` allowed in the station file?
+- Questions to add for 09:00: may scored runs use `dreamcli robot up` + our harness? Is `rollouts: enabled` allowed in the station file?
 
 ## Our edge (the "data engine")
 **Nothing in Dream's stack detects success or ends an episode** (05 §0). Every team gets the same model. The winner is the team that gets the most out of each robot-minute. Our loop:
@@ -86,7 +86,7 @@ The rack, port and panel never move, so the harness can put the arms in a **cano
 
 _Dropped:_ world-model divergence as a failure detector. `get_action` returns no predicted frames (05 §0).
 
-## Questions for organizers at 08:00 (must-ask)
+## Questions for organizers at 09:00 kickoff (must-ask)
 1. The scoring rubric: partial credit per subtask? Time limit? Number of attempts, best-of or average? Tiebreaker?
 2. Are our own control loop + VLM API + scripted moves allowed during **scored** runs? Can a human reset or touch anything between subtasks?
 3. Fine-tune credits per team? **How does training time scale with steps (500 vs 1000)?** Current queue length? How many concurrent jobs? Is there a priority queue for the event? Can they keep our model warm?
@@ -98,7 +98,8 @@ _Dropped:_ world-model divergence as a failure detector. `get_action` returns no
 
 ## Roles (5-person team)
 - **Operator A / B** — Quest teleop, one written strategy (`docs/DEMO-PROTOCOL.md`).
-- **Curator** — dashboard playback, drops bad episodes, runs add_eef/finetune, owns the credits.
+- **Curator** — books stations at 10:00, dashboard playback, drops bad episodes, runs `tools/rehearse_pipeline.sh` + `tools/ft.py` (never the kit's `finetune.py`), owns the credits.
+- **Sissi** — approves every paid `ft.py launch` ("Sissi's OK").
 - **Harness lead** — `hillclimb/` state machine + recovery, on the base model all day.
 - **Judge/eval lead** — VLM judge, eval logs, per-subtask success table, model selection.
 

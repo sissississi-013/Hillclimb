@@ -1,6 +1,6 @@
 # 09: Fine-tune data pipeline rehearsal (offline, 2026-11-07 ~04:30)
 
-Goal: no surprise at ~12:30, when FT#1 is queued (a failure would waste a 7–8 h slot). The whole data path ran on a laptop with no hardware, no API key and no upload, using the **real** library (`~/hc-vendor/dream-env-test`: python 3.12, dreamlabs 1.0.37 + dreamlabs-client 1.1.3) and the **real** kit (`~/hc-vendor/physical-ai-hack-2026`).
+Goal: no surprise at ≤13:30, when FT#1 is queued (a failure would waste a 7–8 h slot). The whole data path ran on a laptop with no hardware, no API key and no upload, using the **real** library (`~/hc-vendor/dream-env-test`: python 3.12, dreamlabs 1.0.37 + dreamlabs-client 1.1.3) and the **real** kit (`~/hc-vendor/physical-ai-hack-2026`).
 
 ## Fixtures (written by the real writers, not hand-made)
 - **Demos:** the kit's `dream_hackathon.dataset.DatasetWriter`, called the way `collect.py` calls it on a Metal station: `layouts.to_vector("metal", ...)` (14-wide, gripper in mm), the cameras of `layouts.video_keys("makermods")`, 640×360, 30 fps, H.264. Three folders (`hc-plug`, `hc-open`, `hc-unplug`), each holding 3 episodes × 2 s with its DEMO-PROTOCOL task text. The joints oscillate around `[0, -0.9, 1.3, -0.4, 0, 0]` rad, inside the Metal soft limits (`robots/metal.py` JOINTS).
@@ -25,12 +25,12 @@ Goal: no surprise at ~12:30, when FT#1 is queued (a failure would waste a 7–8 
 | add_eef on each `hc-*-self` | PASS |
 | **FT#2 parent: 3 demo -eef + 2 harvested -eef** | **PASS**: 11 episodes, 700 frames, 30 fps, no notes. **But** the rollout frames are 640×480 and the demos 640×360: Dream accepts the mix without a word (now a WARNING in `ft.py check`) |
 | a `README.md` beside the sessions | skipped (stray). Any other file (`harvest.jsonl`, `.json`) is refused |
-| add_eef speed | 2.8 s for 10 episodes × 450 frames; validation 0.3 s. Rebuilding the parent at 12:30 costs nothing |
+| add_eef speed | 2.8 s for 10 episodes × 450 frames; validation 0.3 s. Rebuilding the parent at queue time costs nothing |
 | **pyarrow exit deadlock** | `validate_dataset` returns, then the interpreter hangs at exit in `arrow::ThreadPool::Shutdown` in **1 of 20 runs**. Seen with ft.py and with a bare 5-line validate script, so the kit's add_eef.py and finetune.py `--check` can hang the same way. Seen on macOS + pyarrow 26; the station is untested |
 
 ## Verified commands (station, from `~/Hillclimb`, `~/dream-env`)
 ```bash
-# FT#1 (~12:30). Free dry run any time before: tools/rehearse_pipeline.sh   (temp parent, then deleted)
+# FT#1 (≤13:30). Free dry run any time before: tools/rehearse_pipeline.sh   (temp parent, then deleted)
 tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft1
 #  = for t in unplug open close plug full (those recorded):
 #      add_eef.py ~/hackathon_data/hc-$t --arm metal --out ~/hackathon_data/hc-ft1/hc-$t-eef --replace
@@ -55,7 +55,7 @@ Env: `HC_KIT=<kit checkout>` if the kit is not at `~/physical-ai-hacks` or `~/ph
   - `check` inspects the parent before Dream's checks: it lists each session with episodes and task texts. ERROR on raw 14-wide sessions, on **STALE** sessions (the source in `~/hackathon_data` or `~/hackathon_data/self` has a different episode count), and on files beside the sessions. WARNING on task texts that are not frozen prompts and on mixed frame sizes.
   - `launch` refuses on those errors before any network call (verified offline). Both commands take `--allow-stale` for a deliberate snapshot.
 - `tools/harvest.py`: warns when rollout frames are not 640×360. The docstring now uses `~/dream-env` and points to the FT#2 step. With `--replace`, an empty subtask now says to remove its stale `-eef`.
-- `docs/RUNBOOK.md` (~12:30), `docs/DEMO-PROTOCOL.md` (Hand-off), `docs/research/06-harvest.md`: the `mv` flow is replaced by the script. Harvest runs in `~/dream-env` (the station has no `~/Hillclimb/.venv`).
+- `docs/RUNBOOK.md` (≤13:30), `docs/DEMO-PROTOCOL.md` (Hand-off), `docs/research/06-harvest.md`: the `mv` flow is replaced by the script. Harvest runs in `~/dream-env` (the station has no `~/Hillclimb/.venv`).
 - `tests/test_ft_check.py`: tests for stale, raw, stray, unknown task and mixed frames, and for the prompt list (`FULL_TASK` must match DEMO-PROTOCOL).
 
 ## Gotchas

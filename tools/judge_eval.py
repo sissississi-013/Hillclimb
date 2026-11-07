@@ -8,7 +8,7 @@ here is what the harness would decide. Layout (one folder per sample; any number
     <root>/<subtask>/<pos|neg>/<sample>/before/<cam>.jpg   optional: the attempt's first frame (for --before)
 
 <subtask> must be a subtask name in config.yaml (unplug_usb, plug_usb, ...). To build it at the event, copy
-logs/<run>/<NN-subtask>-a<k>/inputs/<cam>/<newest>.jpg into a sample folder and file it under pos/ or neg/ by eye.
+logs/harness/<run>/<NN-subtask>-a<k>/inputs/<cam>/<newest>.jpg into a sample folder and file it under pos/ or neg/ by eye.
 Optional <root>/rubric.yaml merges per-subtask keys over config.yaml's rubric, e.g. {plug_usb: {scene: "..."}}, to try
 rubric wording (or a foreign dataset's scene notes) without editing config.yaml.
 

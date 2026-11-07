@@ -6,7 +6,7 @@ Each attempt does these steps:
    (station.py:922-952).
 2. poll it. Every `check_every_s`, judge the newest model-input frame and stop early on success. Stop at
    `max_time_s` otherwise.
-3. stop the run (the arms hold), copy the frames and trace into logs/<run>/<NN-subtask>-a<k>/, and judge the final
+3. stop the run (the arms hold), copy the frames and trace into logs/harness/<run>/<NN-subtask>-a<k>/, and judge the final
    frames plus proprio.
 4. log one JSON line to attempts.jsonl with the verdict. That data feeds DAgger mining.
 5. on failure, run the recovery action (`home` | `none`) and retry, up to `max_attempts` attempts.
@@ -36,7 +36,7 @@ from typing import Any, Callable
 import yaml
 
 from hillclimb import backends
-from hillclimb.judge import CombinedJudge, ConfirmJudge, HumanJudge, Judge, ProprioJudge, Verdict, VLMJudge
+from hillclimb.judge import CombinedJudge, ConfirmJudge, FakeJudge, HumanJudge, Judge, ProprioJudge, Verdict, VLMJudge
 
 ENV_FILE = pathlib.Path(__file__).resolve().parents[1] / ".env"
 
@@ -249,10 +249,12 @@ def build_judge(cfg: dict[str, Any]) -> Judge:
     mode = j.get("mode", "vlm")
     if mode == "human":
         return HumanJudge()
+    if mode == "fake":
+        return FakeJudge()
     if mode == "confirm":
         return ConfirmJudge(auto)
     if mode != "vlm":
-        raise ValueError(f"judge.mode {mode!r}: use vlm | confirm | human")
+        raise ValueError(f"judge.mode {mode!r}: use vlm | confirm | human | fake")
     return auto
 
 
@@ -271,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--only", help="run only this subtask")
     p.add_argument("--prompt", help="with --only: override the prompt (zero-shot prompt search, docs/PROMPTS.md)")
     p.add_argument("--checkpoint", help="override the checkpoint for every subtask (A/B base vs fine-tunes)")
-    p.add_argument("--judge", choices=["vlm", "confirm", "human"], help="override judge.mode (human: operator y/n)")
+    p.add_argument("--judge", choices=["vlm", "confirm", "human", "fake"],
+                   help="override judge.mode (human: operator y/n; fake: offline, default with --backend fake)")
     p.add_argument("--attempts", type=int, help="override max_attempts for every subtask (eval sweeps: use 1)")
     args = p.parse_args(argv)
     load_env(ENV_FILE)  # the RUNBOOK writes the key there
@@ -292,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
             sub.pop("checkpoint", None)
     if args.judge:
         cfg.setdefault("judge", {})["mode"] = args.judge
+    elif args.backend == "fake":
+        cfg.setdefault("judge", {})["mode"] = "fake"  # laptop runs make no paid VLM calls unless --judge vlm
     if args.attempts:
         for sub in cfg["subtasks"]:
             sub["max_attempts"] = args.attempts
