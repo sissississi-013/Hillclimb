@@ -50,6 +50,13 @@ mkdir -p ~/hackathon_data/hc-ft1 && mv ~/hackathon_data/hc-*-eef ~/hackathon_dat
 ```
 Post the job id on issue #1. **When the model lands:** `tools/ft.py prompts <model>` and check that every `hillclimb/config.yaml` prompt appears there verbatim. A prompt that doesn't match is one the fine-tune never learned (`dream/trained_inputs.py`). While it trains: harness tuning on the base model, recovery demos, harvesting (PLAYBOOK § Our edge).
 
+## Replay primitive how-to (only if the rules allow; PLAYBOOK § Replay primitives)
+1. **Record a demo** of reaching the pre-contact pose (teleop, normal dhk-collect folder), or put the arms there and run `HILLCLIMB_ALLOW_ARMS=1 python tools/waypoints.py record --out prims/plug_hover.yaml` (reads only, never powers the arms).
+2. **Extract a waypoint:** `python tools/waypoints.py extract ~/hackathon_data/hc-plug --episode 3 --frame 150 --out prims/plug_hover.yaml` (or `--frames 120:180` for a trajectory; use `--grip-scale 1` for station rollouts). Then set `pre: prims/plug_hover.yaml` on the subtask in `hillclimb/config.yaml`.
+3. **Test dry:** `HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend client --only plug_usb`. The arms are read and the plan is checked (`primitive.json` has the ticks and peak rad/s), and nothing is written.
+4. **Test live with a human on the e-stop:** add `--client-live`, with `defaults.primitive.max_rad_s: 0.25` (and `speed_scale: 0.5` for a trajectory) on the first run. Watch the approach, then go back to the defaults.
+5. If the arms stop short or the run refuses "first target is X rad", re-record. Never raise `max_approach_rad` or `max_rad_s` to make it pass.
+
 ## Harness backends cheat-sheet
 | backend | moves arms? | use |
 |---|---|---|

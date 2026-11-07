@@ -180,3 +180,9 @@ class FakeBackend:
 
     def latest_frames(self) -> dict[str, pathlib.Path]:
         return {}
+
+    def play(self, path: str, dest: pathlib.Path | None = None, opts: dict[str, Any] | None = None) -> dict[str, Any]:
+        self.calls.append(("play", str(path)))
+        if dest is not None:
+            self.collect(dest)
+        return {"ticks": 0, "dry_run": True, "proprio": {"l": {"grip": 1.0, "cmd_grip": 1.0, "max_track_err_rad": 0.0}}}

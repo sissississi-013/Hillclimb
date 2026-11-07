@@ -27,7 +27,7 @@ import time
 from collections import deque
 from typing import Any, Callable, Protocol
 
-from hillclimb import backends
+from hillclimb import backends, primitives
 
 STATION_FILE = pathlib.Path("~/.dreamlabs/station.yaml").expanduser()  # robots/cli.py:40, 107
 TRACE = pathlib.Path("~/.dreamlabs/hillclimb-client.csv").expanduser()  # our own, so the station's trace is kept
@@ -54,6 +54,8 @@ class Station(Protocol):
     def make_loop(self, client: Any, task: str, settings: dict[str, Any]) -> Any: ...  # async ctx, step(now_s)
     def home(self) -> bool: ...
     def close(self) -> None: ...
+    arms: dict[str, Any]  # after open(): "left"/"right" -> FollowerArm (DryRun-wrapped when dry)
+    readers: list[Any]  # after open(): the camera readers
 
 
 def client_settings(cfg: dict[str, Any], sub: dict[str, Any] | None) -> dict[str, Any]:
@@ -184,6 +186,33 @@ class ClientLoopBackend:
                 deadline = max(deadline, now)  # an overrun or a refill wait restarts the schedule (control.py:986-999)
                 await asyncio.sleep(deadline - now)
             self.end = "stopped"
+
+    def play(self, path: str, dest: pathlib.Path | None = None, opts: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Plays a replay primitive between episodes (never during one), with the same dry/live gate as the loop.
+        The joint speed cap is min(opts.max_rad_s, the station's ramp_max_rad_s, 0.5 rad/s). With `dest`, the newest
+        policy JPEG per camera goes to dest/inputs/ for the judge. TODO(event): untested on the station."""
+        if self._thread is not None and self._thread.is_alive():
+            raise RuntimeError("an episode is running; stop() it before playing a primitive")
+        if self._arm_fault:
+            raise RuntimeError("an arm faulted earlier; not moving it again")
+        dream_cfg, kw = apply_settings(self.station.policy_config(self.cfg.get("checkpoint")),
+                                       self.station.loop_settings(), client_settings(self.cfg, None), self.trace)
+        self.station.open(self.dry_run, dream_cfg)
+        o = dict(opts or {})
+        o["max_rad_s"] = min(float(o.get("max_rad_s", 0.5)), float(kw.get("ramp_max_rad_s", 0.5)))
+        try:
+            out = primitives.play(primitives.load(path), self.station.arms, dry_run=self.dry_run, **o)
+        except Exception as exc:
+            self._arm_fault |= any(c.__name__ == "ArmError" for c in type(exc).__mro__)
+            raise
+        if dest is not None:  # TODO(event): the newest encoded JPEG may predate the final hold by <= obs_period_s
+            import base64
+            for r in (r for r in self.station.readers if getattr(getattr(r, "frame", None), "jpeg", "")):
+                (dest / "inputs" / r.name).mkdir(parents=True, exist_ok=True)
+                (dest / "inputs" / r.name / "0.000.jpg").write_bytes(base64.b64decode(r.frame.jpeg))
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "primitive.json").write_text(json.dumps({"path": str(path), **out}, indent=1))
+        return out
 
     def state(self) -> str:  # "starting" | "running" | "idle" | "error"
         return self._state

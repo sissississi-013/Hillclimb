@@ -54,6 +54,14 @@ for subtask in [unplug_usb, open_backing, close_backing, plug_usb]:
 4. **Per-subtask control knobs** via our own `DreamClient` loop (`--backend client`): short execution horizon during insertion (phase-aware replanning: 51%→70%, 2606.00537), long in free space, IK `keep_out` around the rack. _(Only if the organizers allow a custom loop in scored runs.)_
 5. **Policy escalation per subtask:** base vs FT#1 vs FT#2, chosen by our own logged success rates.
 
+### Replay primitives (fixed geometry → less start-state variance)
+The rack, port and panel never move, so the harness can put the arms in a **canonical pre-contact pose** with a deterministic joint replay before Dream takes over: e.g. "hover 2 cm in front of the port" before `plug_usb`, "gripper at the panel edge" before `open_backing`. Dream then always starts the contact-rich part from (nearly) the same state.
+- **Defensible form = `pre:` + Dream.** A subtask's `pre: prims/<file>.yaml` plays before each attempt's Dream episode (after recovery); success still comes from the learned policy. This is the "System-2 harness" story.
+- **`mode: replay`** makes the whole subtask the primitive, then judged (same retries/recovery). Plausible for open/close panel, which is fixed geometry. **ONLY if the organizers allow non-learned motions in scored runs** (question 8 below). Assume not until they say yes.
+- Code: `tools/waypoints.py` (extract from a LeRobot episode, or `record` the current pose read-only), `hillclimb/primitives.py` (play), `ClientLoopBackend.play`. Needs `--backend client`: the station API has no joint move, since `dreamcli robot up` owns the arms.
+- Safety: refuses without `HILLCLIMB_ALLOW_ARMS=1`; dry unless `--client-live`. Moves are our own conservative clamp: ≤0.5 rad/s per joint (also ≤ the station's `ramp_max_rad_s`), a straight joint blend to the first target, trajectories time-stretched under the cap, gripper ≤1/s. It refuses a first target >1 rad from the measured pose. The drivers still clamp to the soft joint limits. Holds on exit and after any fault.
+- TODO(event): none of this has run on the station. A replay that starts from a different cable/panel state than the demo does not adapt to it. Re-record waypoints whenever the rig is touched.
+
 _Dropped:_ world-model divergence as a failure detector. `get_action` returns no predicted frames (05 §0).
 
 ## Questions for organizers at 08:00 (must-ask)
@@ -64,6 +72,7 @@ _Dropped:_ world-model divergence as a failure detector. `get_action` returns no
 5. Is Dream-1-flash available? Which base checkpoint id should we use?
 6. Can we scp datasets off the station? Does the station have internet access for our harness (Fireworks)?
 7. Final leaderboard deadline and when the stage attempts happen.
+8. May scored runs include **non-learned, scripted joint motions**: (a) a replay to a fixed pre-contact pose before the model runs (`pre:`), (b) a whole subtask such as open/close panel done by pure replay (`mode: replay`)?
 
 ## Roles (5-person team)
 - **Operator A / B** — Quest teleop, one written strategy (`docs/DEMO-PROTOCOL.md`).

@@ -17,6 +17,15 @@ defaults:
   max_attempts: 3
   recovery: home          # home | none
   on_fail: abort          # abort | continue
+  # Replay primitives (hillclimb/primitives.py, tools/waypoints.py). A subtask may set `pre: prims/<file>.yaml` (played
+  # before each attempt's Dream episode) and `mode: replay` (the attempt IS that primitive, then judged). Only with
+  # --backend client; dry unless --client-live. ONLY in scored runs if the organizers allow non-learned motions.
+  # TODO(event): record prims/ on the station and set e.g. plug_usb `pre: prims/plug_hover.yaml`.
+  primitive:
+    speed_scale: 1.0        # (0, 1]: slows the trajectory; never faster than recorded
+    max_rad_s: 0.5          # per-joint cap; also capped by the station's ramp_max_rad_s and a hard 0.5 rad/s
+    hz: 40                  # write rate, as robots/home.py
+    max_approach_rad: 1.0   # refuse when the first target is further than this from the measured pose
   # Read only by --backend client (hillclimb/client_loop.py). The station/dry-run backends ignore it: they always run
   # the client default of 30 rows = 1.5 s at 20 Hz (dream/pacing.py:49, robots/run.py:421-515).
   # A subtask's `client:` overrides keys here; `ik` merges one level deep.

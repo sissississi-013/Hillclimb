@@ -11,6 +11,10 @@ Each attempt does these steps:
 4. log one JSON line to attempts.jsonl with the verdict. That data feeds DAgger mining.
 5. on failure, run the recovery action (`home` | `none`) and retry, up to `max_attempts` attempts.
 
+Replay primitives (hillclimb/primitives.py): a subtask's `pre: <file>` is played before every attempt's Dream episode
+(after any recovery), and `mode: replay` makes the attempt just that primitive, then judged. Only a backend with
+`play()` can do this (`client`, `fake`); the station API has no joint move, since `dreamcli robot up` owns the arms.
+
 python -m hillclimb.harness --config hillclimb/config.yaml                     # fake backend (default)
 python -m hillclimb.harness --config hillclimb/config.yaml --backend dry-run   # dreamcli --dry-run, arms never move
 HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness ... --backend station       # REAL ARMS
@@ -43,7 +47,7 @@ class Attempt:
     reason: str
     source: str
     elapsed_s: float
-    end: str  # "early_success" | "timeout" | "run_ended" | "run_error"
+    end: str  # "early_success" | "timeout" | "run_ended" | "run_error" | "replay"
     dir: str
     # For tools/harvest.py: pairs this attempt with its rollout episode (rollout.json task/started_at_utc/run).
     prompt: str = ""
@@ -63,6 +67,16 @@ class Harness:
         self.dir = log_root / stamp
         self.dir.mkdir(parents=True, exist_ok=True)
         self.attempts: list[Attempt] = []
+        for sub in cfg["subtasks"]:  # refuse a bad primitive setup before anything moves
+            mode = sub.get("mode", "dream")
+            if mode not in ("dream", "replay") or (mode == "replay" and not sub.get("pre")):
+                raise ValueError(f"{sub['name']}: mode is dream|replay, and replay needs `pre: <primitive file>`")
+            if sub.get("pre") and not hasattr(backend, "play"):
+                raise ValueError(f"{sub['name']}: `pre`/replay needs --backend client (station API: no joint move)")
+
+    def _play(self, sub: dict[str, Any], dest: pathlib.Path | None = None) -> dict[str, Any]:
+        opts = {**(self.cfg.get("defaults", {}).get("primitive") or {}), **(sub.get("primitive") or {})}
+        return self.backend.play(sub["pre"], dest, opts)  # type: ignore[attr-defined]
 
     def _log(self, a: Attempt) -> None:
         self.attempts.append(a)
@@ -77,6 +91,10 @@ class Harness:
         every = sub.get("check_every_s", d.get("check_every_s", 0))
         attempt_dir = self.dir / f"{index:02d}-{sub['name']}-a{k}"
         checkpoint = sub.get("checkpoint", self.cfg.get("checkpoint"))
+        if sub.get("mode") == "replay":
+            return self._replay_attempt(sub, k, attempt_dir)
+        if sub.get("pre"):
+            self._play(sub)
         started_at = _iso(self.wall())
         self.backend.start(sub["prompt"], checkpoint)
         t0 = next_check = self.clock()
@@ -105,9 +123,24 @@ class Harness:
         a = Attempt(sub["name"], k, bool(v.success), v.score, v.reason, v.source,
                     round(self.clock() - t0, 2), end, str(attempt_dir), sub["prompt"], checkpoint, started_at,
                     ended_at, _station_run(attempt_dir))
+        return self._finish(a, attempt_dir)
+
+    def _finish(self, a: Attempt, attempt_dir: pathlib.Path) -> Attempt:
+        attempt_dir.mkdir(parents=True, exist_ok=True)
         (attempt_dir / "verdict.json").write_text(json.dumps(dataclasses.asdict(a), indent=1))
         self._log(a)
         return a
+
+    def _replay_attempt(self, sub: dict[str, Any], k: int, attempt_dir: pathlib.Path) -> Attempt:
+        """The attempt is the primitive alone, then the same judge. No prompt logged: harvest must never pair it."""
+        started_at, t0 = _iso(self.wall()), self.clock()
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+        out = self._play(sub, attempt_dir)
+        frames = backends.latest_frames_in(attempt_dir / "inputs")
+        v = self.judge(sub, frames, out.get("proprio") or {})
+        return self._finish(Attempt(sub["name"], k, bool(v.success), v.score, v.reason, v.source,
+                                    round(self.clock() - t0, 2), "replay", str(attempt_dir), "", None,
+                                    started_at, _iso(self.wall())), attempt_dir)
 
     def recover(self, sub: dict[str, Any]) -> None:
         # TODO(event): `home` opens the grippers (station.py:535), so a held cable drops. Use `none` (retry from
@@ -149,7 +182,9 @@ def _station_run(attempt_dir: pathlib.Path) -> int | None:
 
 def build_judge(cfg: dict[str, Any]) -> Judge:
     j = cfg.get("judge", {})
-    return CombinedJudge(VLMJudge(j.get("model", VLMJudge().model), j.get("threshold", 0.7)), ProprioJudge())
+    vlm = VLMJudge(j.get("model", VLMJudge().model), j.get("threshold", 0.7),
+                   reasoning_effort=j.get("reasoning_effort", "none"), max_tokens=j.get("max_tokens", 800))
+    return CombinedJudge(vlm, ProprioJudge())
 
 
 def _client_backend(cfg: dict[str, Any], dry_run: bool) -> backends.Backend:
