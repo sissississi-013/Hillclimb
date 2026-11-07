@@ -89,7 +89,8 @@ def plan(p: Primitive, start: np.ndarray, *, hz: float = 40.0, speed_scale: floa
     if len(traj) > 1:
         rate = p.fps * speed_scale
         peak = float(np.abs(np.diff(traj[:, joints], axis=0)).max()) * rate
-        rate /= max(1.0, peak / cap * 1.05)
+        grip_peak = float(np.abs(np.diff(traj[:, [6, 13]], axis=0)).max()) * rate  # intermediate grasps (PR #2 review)
+        rate /= max(1.0, peak / cap * 1.05, grip_peak / MAX_GRIP_PER_S * 1.05)
         t_src = np.arange(len(traj)) / rate
         t = np.arange(1, int(np.ceil(t_src[-1] * hz)) + 1) / hz
         out.append(np.column_stack([np.interp(t, t_src, traj[:, k]) for k in range(14)]))

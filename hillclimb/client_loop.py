@@ -199,10 +199,10 @@ class ClientLoopBackend:
             raise RuntimeError("an arm faulted earlier; not moving it again")
         dream_cfg, kw = apply_settings(self.station.policy_config(self.cfg.get("checkpoint")),
                                        self.station.loop_settings(), client_settings(self.cfg, None), self.trace)
-        self.station.open(self.dry_run, dream_cfg)
         o = dict(opts or {})
         o["max_rad_s"] = min(float(o.get("max_rad_s", 0.5)), float(kw.get("ramp_max_rad_s", 0.5)))
         try:
+            self.station.open(self.dry_run, dream_cfg)  # inside the fault boundary: open() homes (PR #2 review)
             out = primitives.play(primitives.load(path), self.station.arms, dry_run=self.dry_run, **o)
         except Exception as exc:
             self._arm_fault |= any(c.__name__ == "ArmError" for c in type(exc).__mro__)

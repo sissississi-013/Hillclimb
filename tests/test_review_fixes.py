@@ -248,3 +248,34 @@ def test_harness_judge_override_flag(tmp_path, monkeypatch):
     monkeypatch.setattr(harness, "Harness", Spy)
     assert harness.main(["--judge", "human", "--logs", str(tmp_path)]) == 0
     assert isinstance(seen["judge"], HumanJudge)
+
+
+def test_primitive_intermediate_grasp_preserved():
+    import numpy as np
+    from hillclimb import primitives
+    z = np.zeros((3, 6))
+    p = primitives.Primitive(fps=30, joints={"left": z, "right": z},
+                             gripper={"left": np.array([1.0, 0.0, 1.0]), "right": np.ones(3)}, meta={})
+    cmds = primitives.plan(p, np.r_[np.zeros(6), 1.0, np.zeros(6), 1.0], hz=40)
+    assert cmds[:, 6].min() < 0.05  # the close actually happens before the reopen
+
+
+def test_replay_open_failure_latches_arm_fault(tmp_path, monkeypatch):
+    import pytest
+    from hillclimb import client_loop
+    monkeypatch.setattr(client_loop, "apply_settings", lambda *a: ({}, {}))
+
+    class ArmError(Exception):
+        pass
+
+    class St:
+        def policy_config(self, c): return {}
+        def loop_settings(self): return {}
+        def open(self, dry, cfg): raise ArmError("homing failed")
+
+    be = client_loop.ClientLoopBackend.__new__(client_loop.ClientLoopBackend)
+    be._thread, be._arm_fault, be.station, be.cfg, be.dry_run = None, False, St(), {}, False
+    be.trace = tmp_path / "t.csv"
+    with pytest.raises(ArmError):
+        be.play(str(tmp_path / "p.yaml"))
+    assert be._arm_fault is True
