@@ -67,7 +67,8 @@ If two stations are booked, run two operators in parallel on different subtasks,
   - cable dropped on the rack shelf → re-grasp and continue
   - panel ajar or half-closed → re-grip and finish
   - plug still partly in the port after a weak pull → re-grip and pull straight
-- **Precision-phase demos (~10):** start the episode already hovering 2–3 cm in front of the port, then insert.
+- **Precision-phase demos (~10):** optionally record them with `teleop.translation_scale: 0.5` in `configs/station.yaml`, which moves the tool half as far as your hand. That gives finer control at the port, and the recorded robot motion stays valid. Ask the organizers before editing the station config, and put it back to 1.0 afterwards.
+  Original note: start the episode already hovering 2–3 cm in front of the port, then insert.
 - Pull the harness's logged failure states (`logs/harness/<run>/attempts.jsonl`, `tools/report.py logs/harness`) and recreate the most common ones first.
 
 ## Hand-off to fine-tune (curator)
