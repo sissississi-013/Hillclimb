@@ -22,6 +22,7 @@ cd ~/Hillclimb && ~/dream-env/bin/python -m pip install pyyaml numpy pyarrow pyt
 echo "FIREWORKS_API_KEY=..." > .env && chmod 600 .env                        # never commit. The harness loads it; other tools: set -a; . ./.env; set +a
 ~/dream-env/bin/python -m pytest -q                                           # all green, no hardware
 bash tools/api_check.sh                                                       # our code vs the INSTALLED dream/robots API: expect 0 problems
+~/dream-env/bin/python tools/ft.py queue                                      # shared FT line: decides FT#1 timing (PLAYBOOK § Queue race)
 ~/dream-env/bin/python -c "import dream; print([m.id for m in dream.DreamClient().get_models()])"   # → base checkpoint id → config.yaml
 ```
 
