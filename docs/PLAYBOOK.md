@@ -36,6 +36,12 @@ _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 | **close_backing** | medium | Push from a fixed point until flush, then retract. Replay is likely enough. Judge needs a `scene` note for what "flush/latched" looks like. |
 | **plug_usb** | **hardest, decides the leaderboard** | Keep the plug orientation consistent (USB-A is keyed). Use `pre:` hover ~2 cm in front of the port, then Dream-1 with a short execution horizon (client backend). Recovery = retract, re-align, re-approach; never push through a jam. Gripper-only retry: `recovery: none`, so we don't home and drop the cable. 50–60 demos + 1:1 recovery demos + ~10 precision-phase demos. |
 
+## Queue race (check `tools/ft.py queue` at 10:00 and every hour)
+The training queue is **shared by every account** (`dream/fine_tuning.py:queue`: jobs_ahead_of_new, running, slots_free/slots_total). Every team at this event will try to queue around lunch, so **position in the line can matter more than 20 extra demos.**
+- **Rule:** if `slots_total` is small (≲ the number of Hill Climb teams) or `jobs_ahead_of_new` is growing, **queue FT#1 as soon as we have ~25 clean plug_usb + ~20 open + ~10 each unplug/close (~11:45–12:15)**, not at 13:30. Keep collecting. FT#2 picks up everything else.
+- If the queue is empty and slots are free, the 13:30 plan stands.
+- Ask the organizers whether hackathon teams have reserved slots.
+
 ## Option: a faster first iteration (decide at 09:00 from the organizers' answer)
 If a job's training time scales with `steps`, **FT#1 at 500 steps** (~$100, maybe ~4 h) lands around **17:30** instead of ~22:00. That buys a real loop on Saturday: evaluate FT#1 → record targeted corrections → **FT#2 = `--resume-from FT#1 --steps 500`** on all data, queued by 21:30. A resumed job continues the optimizer and LR schedule, so 500+500 ≈ one 1000-step run trained on better data. **Ask:** "How does training time scale with steps? What's the queue right now? Can we run 2 jobs at once?" If 2 jobs can run in parallel, also launch a plug-only specialist.
 

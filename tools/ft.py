@@ -12,6 +12,7 @@ Runs ON THE STATION in ~/dream-env (needs the `dream` client + the team API key 
     # poll / list
     ~/dream-env/bin/python tools/ft.py status ftj_...
     ~/dream-env/bin/python tools/ft.py models
+    ~/dream-env/bin/python tools/ft.py queue      # shared line over ALL teams: check at 10:00 and hourly
     ~/dream-env/bin/python tools/ft.py prompts dream-1-ft:<uid8>-hc-ft1   # verify harness prompts match training
 
 Facts from dreamlabs-client 1.1.3 `DreamClient.finetune` docstring (dream/facade.py:312-398):
@@ -256,6 +257,13 @@ def cmd_prompts(args: argparse.Namespace) -> None:
         print("prompt:", repr(task))
 
 
+def cmd_queue(_: argparse.Namespace) -> None:
+    """The shared training line, over every account (dream/fine_tuning.py:queue): jobs ahead, running, slots."""
+    q = dream.fine_tuning.queue()
+    print(f"jobs_ahead_of_new={q.get('jobs_ahead_of_new')} running={q.get('running')} "
+          f"slots_free={q.get('slots_free')}/{q.get('slots_total')} at {q.get('updated_at')}")
+
+
 def cmd_models(_: argparse.Namespace) -> None:
     import dream
 
@@ -293,6 +301,7 @@ def main() -> None:
     s.add_argument("--watch", action="store_true")
     s.set_defaults(fn=cmd_status)
     sub.add_parser("models").set_defaults(fn=cmd_models)
+    sub.add_parser("queue", help="shared training queue: jobs ahead, slots free").set_defaults(fn=cmd_queue)
     pr = sub.add_parser("prompts", help="task texts a fine-tune was trained on")
     pr.add_argument("model")
     pr.set_defaults(fn=cmd_prompts)
