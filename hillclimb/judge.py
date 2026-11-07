@@ -91,21 +91,22 @@ class VLMJudge:
             text += "\n" + BEFORE_NOTE
         content: list[dict[str, Any]] = [{"type": "text", "text": text}]
         shots = [(f"{cam} BEFORE", p) for cam, p in (before or {}).items()] + list(frames.items())
-        for cam, path in shots:
-            b64 = base64.b64encode(pathlib.Path(path).read_bytes()).decode()
-            content += [{"type": "text", "text": f"[{cam}]"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]
-        body = {"model": self.model, "temperature": 0, "max_tokens": self.max_tokens,
-                "messages": [{"role": "user", "content": content}]}
-        if self.json_mode:  # forces a JSON reply, so a model that "thinks aloud" cannot run out of tokens first
-            body["response_format"] = {"type": "json_object"}
-        if self.reasoning_effort is not None:
-            body["reasoning_effort"] = self.reasoning_effort
-        try:
+        try:  # reading a frame can fail too: the loop wipes the inputs folder when a new run opens its trace
+            for cam, path in shots:
+                b64 = base64.b64encode(pathlib.Path(path).read_bytes()).decode()
+                content += [{"type": "text", "text": f"[{cam}]"},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]
+            body = {"model": self.model, "temperature": 0, "max_tokens": self.max_tokens,
+                    "messages": [{"role": "user", "content": content}]}
+            if self.json_mode:  # forces a JSON reply, so a model that "thinks aloud" cannot run out of tokens first
+                body["response_format"] = {"type": "json_object"}
+            if self.reasoning_effort is not None:
+                body["reasoning_effort"] = self.reasoning_effort
             reply = self._post(body)["choices"][0]["message"]["content"]
             data = json.loads(re.search(r"\{.*\}", reply, re.S).group(0))
             score = float(data.get("score", 0.0))
-            return Verdict(bool(data.get("success")) and score >= self.threshold, score,
+            # `is True`: a reply of "success": "false" (a string) must not pass as bool("false") == True
+            return Verdict(data.get("success") is True and score >= self.threshold, score,
                            data.get("description", ""), "vlm")
         except Exception as exc:  # a judge failure is "unknown", never a crash mid-run
             return Verdict(None, reason=f"vlm error: {exc}", source="vlm")
@@ -120,4 +121,8 @@ class CombinedJudge:
         if p.success is False:
             return p  # the cheap veto: no VLM call
         v = self.vlm(subtask, frames, proprio)
-        return v if v.success is not None else p
+        if v.success is not None:
+            return v
+        # Proprio can only veto. "Not holding" is true of nearly every close_backing end, and "holding" of a gripper
+        # clamped on a cable still in the port, so a VLM outage must stay unknown (= retry), never pass on proprio.
+        return Verdict(None, p.score, f"{v.reason}; proprio: {p.reason or 'no opinion'}", v.source or "vlm")

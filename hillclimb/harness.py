@@ -28,6 +28,7 @@ import argparse
 import dataclasses
 import datetime
 import json
+import os
 import pathlib
 import time
 from typing import Any, Callable
@@ -36,6 +37,8 @@ import yaml
 
 from hillclimb import backends
 from hillclimb.judge import CombinedJudge, Judge, ProprioJudge, Verdict, VLMJudge
+
+ENV_FILE = pathlib.Path(__file__).resolve().parents[1] / ".env"
 
 
 @dataclasses.dataclass
@@ -95,33 +98,43 @@ class Harness:
             return self._replay_attempt(sub, k, attempt_dir)
         if sub.get("pre"):
             self._play(sub)
-        started_at = _iso(self.wall())
-        self.backend.start(sub["prompt"], checkpoint)
-        t0 = next_check = self.clock()
-        end, early = "timeout", None
-        while (elapsed := self.clock() - t0) < max_time:
-            state = self.backend.state()
-            if state in ("idle", "error") and elapsed > 1.0:
-                end = "run_ended" if state == "idle" else "run_error"
-                break
-            if every and self.clock() >= next_check + every:
-                next_check = self.clock()
-                frames = self.backend.latest_frames()
-                if frames:
-                    v = self.judge(sub, frames, {})
-                    if v.success:
-                        end, early = "early_success", v
-                        break
-            self.sleep(self.cfg.get("poll_s", 0.5))
+        start_wall = self.wall()
+        started_at = _iso(start_wall)
+        t0 = self.clock()
+        try:  # any exception (HTTP error, judge crash, Ctrl-C) must still stop the run: the station runs until told
+            self.backend.start(sub["prompt"], checkpoint)
+            t0 = next_check = self.clock()
+            end, early = "timeout", None
+            while (elapsed := self.clock() - t0) < max_time:
+                state = self.backend.state()
+                if state in ("idle", "error") and elapsed > 1.0:
+                    end = "run_ended" if state == "idle" else "run_error"
+                    break
+                if every and self.clock() >= next_check + every:
+                    next_check = self.clock()
+                    # Only this attempt's frames: until the loop opens its trace, the folder holds the LAST run's.
+                    frames = _fresh(self.backend.latest_frames(), start_wall)
+                    if frames:
+                        v = self.judge(sub, frames, {})
+                        if v.success:
+                            end, early = "early_success", v
+                            break
+                self.sleep(self.cfg.get("poll_s", 0.5))
+        except BaseException:
+            _stop_quietly(self.backend)
+            raise
         self.backend.stop()
         ended_at = _iso(self.wall())
         proprio = self.backend.collect(attempt_dir)
-        frames = backends.latest_frames_in(attempt_dir / "inputs")
+        frames = _fresh(backends.latest_frames_in(attempt_dir / "inputs"), start_wall)
         v = self.judge(sub, frames, proprio) if end != "run_error" else Verdict(False, reason="run error")
         if early is not None and v.success is None:
             v = early
+        status = _status(attempt_dir)
+        # The station keeps the last checkpoint a Start named, so log the one it really ran (status after the Stop).
+        ran = status.get("checkpoint") if isinstance(status.get("checkpoint"), str) else checkpoint
         a = Attempt(sub["name"], k, bool(v.success), v.score, v.reason, v.source,
-                    round(self.clock() - t0, 2), end, str(attempt_dir), sub["prompt"], checkpoint, started_at,
+                    round(self.clock() - t0, 2), end, str(attempt_dir), sub["prompt"], ran, started_at,
                     ended_at, _station_run(attempt_dir))
         return self._finish(a, attempt_dir)
 
@@ -147,7 +160,14 @@ class Harness:
         # where the arms are) for plug_usb once a cable is in hand.
         action = sub.get("recovery", self.cfg.get("defaults", {}).get("recovery", "home"))
         if action == "home":
-            self.backend.home()
+            try:
+                self.backend.home()
+            except Exception as error:  # e.g. station 409 while it auto-homes or a driver is down (08 Q4)
+                code = getattr(error, "code", None)
+                if code != 409:
+                    raise
+                print(f"recovery: home refused (409: {error}); retrying from where the arms are")
+                self.sleep(2.0)
 
     def run(self) -> bool:
         d = self.cfg.get("defaults", {})
@@ -172,12 +192,52 @@ def _iso(t: float) -> str:
     return datetime.datetime.fromtimestamp(t, datetime.timezone.utc).isoformat(timespec="milliseconds")
 
 
-def _station_run(attempt_dir: pathlib.Path) -> int | None:
-    try:  # StationBackend.collect() saves /status after the Stop; its `run` names the rollout folder's _run<N>
-        run = json.loads((attempt_dir / "status.json").read_text()).get("run")
+def _status(attempt_dir: pathlib.Path) -> dict[str, Any]:
+    try:  # StationBackend.collect() saves /status after the Stop
+        status = json.loads((attempt_dir / "status.json").read_text())
     except (OSError, ValueError):
-        return None
+        return {}
+    return status if isinstance(status, dict) else {}
+
+
+def _station_run(attempt_dir: pathlib.Path) -> int | None:
+    run = _status(attempt_dir).get("run")  # names the rollout folder's _run<N>
     return run if isinstance(run, int) else None
+
+
+def _fresh(frames: dict[str, pathlib.Path], since_wall: float) -> dict[str, pathlib.Path]:
+    """Frames written at or after `since_wall` (copy2 keeps mtimes). The loop wipes the inputs folder only when it
+    opens its trace, seconds after a Start, so before that (or for a run stopped while starting) it holds the
+    previous run's frames, which must never be judged as this attempt's."""
+    out = {}
+    for cam, path in frames.items():
+        try:
+            if path.stat().st_mtime >= since_wall:
+                out[cam] = path
+        except OSError:
+            pass
+    return out
+
+
+def _stop_quietly(backend: backends.Backend) -> None:
+    try:
+        backend.stop()
+    except BaseException as exc:  # noqa: BLE001 - the original error is the one to report
+        print(f"!! stop after an error failed too ({type(exc).__name__}: {exc}): PRESS THE E-STOP / Stop on the page")
+
+
+def load_env(path: pathlib.Path) -> None:
+    """KEY=VALUE lines of `path` into os.environ, never overriding what is already set (FIREWORKS_API_KEY)."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.removeprefix("export ").partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def build_judge(cfg: dict[str, Any]) -> Judge:
@@ -205,6 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checkpoint", help="override the checkpoint for every subtask (A/B base vs fine-tunes)")
     p.add_argument("--attempts", type=int, help="override max_attempts for every subtask (eval sweeps: use 1)")
     args = p.parse_args(argv)
+    load_env(ENV_FILE)  # the RUNBOOK writes the key there
+    if not os.environ.get("FIREWORKS_API_KEY"):
+        print("!! FIREWORKS_API_KEY is not set: every VLM verdict is unknown, so every attempt counts as a failure")
     cfg = yaml.safe_load(open(args.config))
     if args.only:
         cfg["subtasks"] = [s for s in cfg["subtasks"] if s["name"] == args.only]
@@ -222,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
         for sub in cfg["subtasks"]:
             sub["max_attempts"] = args.attempts
     backend = {"fake": backends.FakeBackend, "dry-run": backends.DreamcliDryRunBackend,
-               "station": lambda: backends.StationBackend(cfg.get("station_url", "http://127.0.0.1:8091")),
+               "station": lambda: backends.StationBackend(cfg.get("station_url", "http://127.0.0.1:8091"),
+                                                      backends.trace_from_station_file(cfg.get("station_file"))),
                "client": lambda: _client_backend(cfg, dry_run=not args.client_live)}[args.backend]()
     try:
         ok = Harness(cfg, backend, build_judge(cfg), pathlib.Path(args.logs)).run()

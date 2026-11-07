@@ -16,8 +16,8 @@ ssh -L 8080:localhost:8080 <user>@<station>
 # station
 tmux new -A -s hc
 git clone https://github.com/sissississi-013/Hillclimb ~/Hillclimb   # private: use a PAT or scp a tarball:  (laptop) git archive HEAD | ssh <user>@<station> 'mkdir -p ~/Hillclimb && tar -x -C ~/Hillclimb'
-cd ~/Hillclimb && ~/dream-env/bin/python -m pip install pyyaml numpy pyarrow   # harness runs in the Dream env (needs `dream`, `robots`)
-echo "FIREWORKS_API_KEY=..." > .env && chmod 600 .env                        # never commit
+cd ~/Hillclimb && ~/dream-env/bin/python -m pip install pyyaml numpy pyarrow pytest   # harness runs in the Dream env (needs `dream`, `robots`)
+echo "FIREWORKS_API_KEY=..." > .env && chmod 600 .env                        # never commit. The harness loads it; other tools: set -a; . ./.env; set +a
 ~/dream-env/bin/python -m pytest -q                                           # all green, no hardware
 bash tools/api_check.sh                                                       # our code vs the INSTALLED dream/robots API: expect 0 problems
 ~/dream-env/bin/python -c "import dream; print([m.id for m in dream.DreamClient().get_models()])"   # → base checkpoint id → config.yaml
@@ -31,6 +31,8 @@ python -m hillclimb.harness --backend dry-run --only unplug_usb
 # 2) live via the station API (start `dreamcli robot up` in another tmux pane first)
 HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend station --only unplug_usb
 ```
+- [ ] The harness must NOT print `!! FIREWORKS_API_KEY is not set` (then every attempt is judged a failure).
+- [ ] `checkpoint: null` is NOT "the station file's model" once any Start named one: the station keeps the last checkpoint it was sent until restarted. The logged `checkpoint` is now the one `/status` reports after the Stop; pass `--checkpoint` explicitly for A/B runs.
 - [ ] 3–5 attempts per subtask. Paste each `logs/harness/<run>/attempts.jsonl` summary into `evals/zero-shot.md`, as a table of subtask × success/attempts + failure notes.
 - [ ] **Check the judge against your own eyes** on every attempt. If the VLM disagrees with a human more than 1 in 5 times, fix the rubric before trusting it. Then freeze it.
 - [ ] **Calibrate the judge on OUR rig (eval lead, ~15 min, ~40 Fireworks calls).** Write a one-line `rubric.scene` per subtask in `hillclimb/config.yaml` saying what is where (which block is the port, what seated looks like). Without it, the judge looked at the wrong part and gave confident false successes (07-judge-eval.md). Save ~20 pos + ~20 neg frames per subtask from the baseline runs into `evals/judge/<subtask>/{pos,neg}/<sample>/<cam>.jpg`, then run `python tools/judge_eval.py evals/judge`. Target: **0 false successes**. Missed successes only cost a retry.

@@ -225,6 +225,8 @@ class ClientLoopBackend:
     def home(self) -> None:
         if self.dry_run or self._arm_fault:  # a dry run never homes; after an arm fault nothing homes (run.py:241)
             return
+        if self._thread is not None and self._thread.is_alive():  # stop() joins 30 s at most: the loop may still write
+            raise RuntimeError("the episode thread is still running; not homing over it (two writers)")
         if not self.station.home():
             self._arm_fault = True
             raise RuntimeError("an arm did not reach home; see the station log")

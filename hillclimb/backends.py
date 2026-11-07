@@ -26,6 +26,20 @@ from typing import Any, Protocol
 
 # TODO(event): confirm the station file's trace_path. The default is ~/.dreamlabs/last-run.csv (config.py:132).
 DEFAULT_TRACE = pathlib.Path("~/.dreamlabs/last-run.csv").expanduser()
+
+
+def trace_from_station_file(station_file: str | None) -> pathlib.Path:
+    """The station file's `trace_path` (robots/config.py:526, 774), else the default. A trace_path the harness doesn't
+    know about means no frames and every attempt judged unknown (08-code-review.md Q2)."""
+    if station_file:
+        path = pathlib.Path(station_file).expanduser()
+        if path.exists():
+            import yaml
+
+            raw = yaml.safe_load(path.read_text()) or {}
+            if raw.get("trace_path"):
+                return pathlib.Path(str(raw["trace_path"])).expanduser()
+    return DEFAULT_TRACE
 ACTIVE = {"starting", "running", "stopping", "homing", "resetting"}  # robots/station.py:85-91
 
 

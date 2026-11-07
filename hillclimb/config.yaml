@@ -54,7 +54,7 @@ subtasks:
   - name: unplug_usb
     prompt: "unplug the usb cable from the rack"
     max_time_s: 25
-    proprio: {expect_holding: true}      # the pulled cable should still be in a gripper
+    proprio: {expect_holding: null}   # a clean unplug that drops the plug clear of the rack still counts (08 Q1)
     client: {execution_horizon: 10, always_async: true, speed_scale: 0.8}   # contact: ~0.5 s prefixes
     rubric:
       success: "the USB plug is fully out of the rack port and is held by a gripper or lies clear of the rack"
