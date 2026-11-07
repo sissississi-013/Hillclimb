@@ -33,6 +33,7 @@ HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend station --only unpl
 ```
 - [ ] 3–5 attempts per subtask. Paste each `logs/harness/<run>/attempts.jsonl` summary into `evals/zero-shot.md`, as a table of subtask × success/attempts + failure notes.
 - [ ] **Check the judge against your own eyes** on every attempt. If the VLM disagrees with a human more than 1 in 5 times, fix the rubric before trusting it. Then freeze it.
+- [ ] **Calibrate the judge on OUR rig (eval lead, ~15 min, ~40 Fireworks calls).** Write a one-line `rubric.scene` per subtask in `hillclimb/config.yaml` saying what is where (which block is the port, what seated looks like). Without it, the judge looked at the wrong part and gave confident false successes (07-judge-eval.md). Save ~20 pos + ~20 neg frames per subtask from the baseline runs into `evals/judge/<subtask>/{pos,neg}/<sample>/<cam>.jpg`, then run `python tools/judge_eval.py evals/judge`. Target: **0 false successes**. Missed successes only cost a retry.
 - [ ] Re-weight the demo budget in `DEMO-PROTOCOL.md` toward the worst subtask.
 
 ## 08:35 — zero-shot prompt search (`docs/PROMPTS.md`, ~20 min), then freeze prompts

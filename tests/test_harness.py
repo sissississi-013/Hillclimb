@@ -183,3 +183,40 @@ def test_cli_overrides(tmp_path, monkeypatch):
     sub = seen["cfg"]["subtasks"]
     assert len(sub) == 1 and sub[0]["prompt"] == "Plug the USB cable into the port" and sub[0]["max_attempts"] == 1
     assert seen["cfg"]["checkpoint"] == "dream-1-ft:x-hc-ft1"
+
+
+def test_vlm_judge_body_flags_scene_and_before(tmp_path):
+    img = tmp_path / "f.jpg"
+    img.write_bytes(b"x")
+    reply = {"choices": [{"message": {"content": '{"description": "d", "score": 0.9, "success": true}'}}]}
+    seen = []
+    sub = {"name": "plug_usb", "rubric": {"success": "in", "scene": "the port is the black hub"}}
+    VLMJudge(post=lambda b: seen.append(b) or reply)(sub, {"scene": img}, {}, before={"scene": img})
+    b = seen[0]
+    assert b["reasoning_effort"] == "none" and b["response_format"] == {"type": "json_object"}
+    text = b["messages"][0]["content"][0]["text"]
+    assert "black hub" in text and "BEFORE" in text
+    labels = [c["text"] for c in b["messages"][0]["content"][1:] if c["type"] == "text"]
+    assert labels == ["[scene BEFORE]", "[scene]"]
+    VLMJudge(post=lambda b: seen.append(b) or reply, reasoning_effort=None, json_mode=False)(sub, {"scene": img}, {})
+    assert "reasoning_effort" not in seen[1] and "response_format" not in seen[1]
+
+
+def test_judge_eval_loads_folders_and_scores(tmp_path):
+    import importlib.util
+    root = pathlib.Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("judge_eval", root / "tools" / "judge_eval.py")
+    je = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(je)
+    for label, name in (("pos", "a"), ("neg", "b")):
+        d = tmp_path / "plug_usb" / label / name
+        (d / "before").mkdir(parents=True)
+        (d / "scene.jpg").write_bytes(b"x")
+        (d / "before" / "scene.jpg").write_bytes(b"x")
+    s = je.load_samples(tmp_path)
+    assert [(x["id"], x["label"], sorted(x["frames"]), sorted(x["before"])) for x in s] == [
+        ("plug_usb/pos/a", True, ["scene"], ["scene"]), ("plug_usb/neg/b", False, ["scene"], ["scene"])]
+    m = je.metrics([{"label": True, "pred": True, "success": True, "latency_s": 1.0},
+                    {"label": False, "pred": True, "success": True, "latency_s": 3.0},
+                    {"label": False, "pred": False, "success": None, "latency_s": 2.0}])
+    assert (m["tp"], m["fp"], m["tn"], m["fpr"], m["unknown"], m["latency_p50_s"]) == (1, 1, 1, 0.5, 1, 2.0)

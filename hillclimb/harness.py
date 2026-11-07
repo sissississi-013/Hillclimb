@@ -183,7 +183,8 @@ def _station_run(attempt_dir: pathlib.Path) -> int | None:
 def build_judge(cfg: dict[str, Any]) -> Judge:
     j = cfg.get("judge", {})
     vlm = VLMJudge(j.get("model", VLMJudge().model), j.get("threshold", 0.7),
-                   reasoning_effort=j.get("reasoning_effort", "none"), max_tokens=j.get("max_tokens", 800))
+                   reasoning_effort=j.get("reasoning_effort", "none"), max_tokens=j.get("max_tokens", 800),
+                   json_mode=j.get("json_mode", True))
     return CombinedJudge(vlm, ProprioJudge())
 
 

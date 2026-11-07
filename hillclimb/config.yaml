@@ -7,9 +7,15 @@ checkpoint: null                        # null = the station file's model. TODO(
 poll_s: 0.5
 total_time_s: 600                       # TODO(event): scored-attempt time limit from the rules
 
-judge:
-  model: accounts/fireworks/models/qwen3p8-max   # fallback: accounts/fireworks/models/kimi-k3
+judge:   # measured on REBOOT26 frames in docs/research/07-judge-eval.md; rerun tools/judge_eval.py on our rig
+  model: accounts/fireworks/models/qwen3p8-max   # fallback: accounts/fireworks/models/kimi-k3 (untested beyond 1 call)
   threshold: 0.7
+  reasoning_effort: none  # REQUIRED for qwen3p8-max: with thinking on, 400 tokens went to reasoning and every
+                          # verdict was "unknown". null = omit the field (glm-5p3-flash rejects "none" with HTTP 400)
+  max_tokens: 800
+  json_mode: true         # response_format=json_object; without it the model "thinks aloud" in content and truncates
+  # A subtask's rubric may add `scene:` (what is where on THIS rig: which block is the port, what seated looks like).
+  # On REBOOT26 it took accuracy from ~53% to 92% together with the two fixes above. TODO(event): write them for our rack.
 
 defaults:
   max_time_s: 30          # data_collection.md: demos are 10-30 s, so a run much longer than that has gone wrong

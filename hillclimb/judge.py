@@ -23,7 +23,7 @@ DEFAULT_VLM = "accounts/fireworks/models/qwen3p8-max"
 
 RUBRIC = """You are a strict judge of a robot manipulation step in a server rack.
 Step: {name}. Success means: {success}
-Failure signs: {failure}
+Failure signs: {failure}{scene}
 Images: {cams} (latest frames, after the attempt).
 First DESCRIBE what you see about the rack, the USB cable(s), the rack backing and both grippers, in 2-4
 factual sentences. Then SCORE it. Answer only JSON:
@@ -64,8 +64,13 @@ class ProprioJudge:
 
 class VLMJudge:
     def __init__(self, model: str = DEFAULT_VLM, threshold: float = 0.7, api_key: str | None = None,
-                 post=None) -> None:
+                 post=None, reasoning_effort: str | None = "none", max_tokens: int = 800,
+                 json_mode: bool = True) -> None:
+        # reasoning_effort "none": qwen3p8-max and kimi-k3 are reasoning models. With thinking on, the 400-token
+        # budget went entirely to reasoning_content and the reply had no JSON, so every verdict was "unknown"
+        # (docs/research/07-judge-eval.md). None = leave the field out (for models that reject it).
         self.model, self.threshold = model, threshold
+        self.reasoning_effort, self.max_tokens, self.json_mode = reasoning_effort, max_tokens, json_mode
         self.api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
         self._post = post or self._http_post
 
@@ -79,8 +84,9 @@ class VLMJudge:
         if not frames or (self._post == self._http_post and not self.api_key):
             return Verdict(None, reason="no frames or no FIREWORKS_API_KEY", source="vlm")
         rubric = subtask.get("rubric", {})
+        scene = f"\nScene notes (what is where on this rig): {rubric['scene']}" if rubric.get("scene") else ""
         text = RUBRIC.format(name=subtask["name"], success=rubric.get("success", ""),
-                             failure=rubric.get("failure", ""), cams=", ".join(frames))
+                             failure=rubric.get("failure", ""), scene=scene, cams=", ".join(frames))
         if before:
             text += "\n" + BEFORE_NOTE
         content: list[dict[str, Any]] = [{"type": "text", "text": text}]
@@ -89,8 +95,12 @@ class VLMJudge:
             b64 = base64.b64encode(pathlib.Path(path).read_bytes()).decode()
             content += [{"type": "text", "text": f"[{cam}]"},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]
-        body = {"model": self.model, "temperature": 0, "max_tokens": 400,
+        body = {"model": self.model, "temperature": 0, "max_tokens": self.max_tokens,
                 "messages": [{"role": "user", "content": content}]}
+        if self.json_mode:  # forces a JSON reply, so a model that "thinks aloud" cannot run out of tokens first
+            body["response_format"] = {"type": "json_object"}
+        if self.reasoning_effort is not None:
+            body["reasoning_effort"] = self.reasoning_effort
         try:
             reply = self._post(body)["choices"][0]["message"]["content"]
             data = json.loads(re.search(r"\{.*\}", reply, re.S).group(0))
