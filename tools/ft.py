@@ -30,6 +30,8 @@ import sys
 import time
 
 import dream  # only available in ~/dream-env on the station
+import dream.datasets
+import dream.fine_tuning
 
 KIT = pathlib.Path("~/physical-ai-hacks").expanduser()  # TODO(event): confirm kit path on the station
 EMBODIMENT_FILE = KIT / "src" / "dream_hackathon" / "embodiments" / "makermods.json"
