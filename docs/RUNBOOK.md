@@ -34,6 +34,8 @@ HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend station --only unpl
 - [ ] **Check the judge against your own eyes** on every attempt. If the VLM disagrees with a human more than 1 in 5 times, fix the rubric before trusting it. Then freeze it.
 - [ ] Re-weight the demo budget in `DEMO-PROTOCOL.md` toward the worst subtask.
 
+## 08:35 — zero-shot prompt search (`docs/PROMPTS.md`, ~20 min), then freeze prompts
+
 ## 08:50 — demo sprint 1 starts (operators + curator)
 Follow `docs/DEMO-PROTOCOL.md`. Order: **plug_usb → open_backing → unplug_usb → close_backing → full**. The curator keeps a tally and drops bad episodes from the dashboard.
 - [ ] Set `rollouts: {enabled: true}` in `~/.dreamlabs/station.yaml` (if the organizers allow it) so every policy run from now on is logged for `tools/harvest.py`.

@@ -28,6 +28,9 @@ Images: {cams} (latest frames, after the attempt).
 First DESCRIBE what you see about the rack, the USB cable(s), the rack backing and both grippers, in 2-4
 factual sentences. Then SCORE it. Answer only JSON:
 {{"description": "...", "score": <0.0-1.0 confidence the step succeeded>, "success": <true|false>}}"""
+# Added to RUBRIC when the caller also passes the frames from the start of the attempt (VLMJudge(..., before=...)).
+BEFORE_NOTE = """The [<cam> BEFORE] images are from the START of the attempt; the [<cam>] images are AFTER it. Judge the
+AFTER state, and use BEFORE only to see what changed (the plug, cable and panel positions)."""
 
 
 @dataclasses.dataclass
@@ -72,14 +75,17 @@ class VLMJudge:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
 
-    def __call__(self, subtask, frames, proprio) -> Verdict:
+    def __call__(self, subtask, frames, proprio, before: dict[str, pathlib.Path] | None = None) -> Verdict:
         if not frames or (self._post == self._http_post and not self.api_key):
             return Verdict(None, reason="no frames or no FIREWORKS_API_KEY", source="vlm")
         rubric = subtask.get("rubric", {})
         text = RUBRIC.format(name=subtask["name"], success=rubric.get("success", ""),
                              failure=rubric.get("failure", ""), cams=", ".join(frames))
+        if before:
+            text += "\n" + BEFORE_NOTE
         content: list[dict[str, Any]] = [{"type": "text", "text": text}]
-        for cam, path in frames.items():
+        shots = [(f"{cam} BEFORE", p) for cam, p in (before or {}).items()] + list(frames.items())
+        for cam, path in shots:
             b64 = base64.b64encode(pathlib.Path(path).read_bytes()).decode()
             content += [{"type": "text", "text": f"[{cam}]"},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]

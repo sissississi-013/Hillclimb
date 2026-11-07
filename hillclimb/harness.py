@@ -165,10 +165,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--client-live", action="store_true", help="client backend: write the motors (default: dry)")
     p.add_argument("--logs", default="logs/harness")
     p.add_argument("--only", help="run only this subtask")
+    p.add_argument("--prompt", help="with --only: override the prompt (zero-shot prompt search, docs/PROMPTS.md)")
+    p.add_argument("--checkpoint", help="override the checkpoint for every subtask (A/B base vs fine-tunes)")
+    p.add_argument("--attempts", type=int, help="override max_attempts for every subtask (eval sweeps: use 1)")
     args = p.parse_args(argv)
     cfg = yaml.safe_load(open(args.config))
     if args.only:
         cfg["subtasks"] = [s for s in cfg["subtasks"] if s["name"] == args.only]
+        if not cfg["subtasks"]:
+            p.error(f"no subtask named {args.only}")
+    if args.prompt:
+        if not args.only:
+            p.error("--prompt needs --only")
+        cfg["subtasks"][0]["prompt"] = args.prompt
+    if args.checkpoint:
+        cfg["checkpoint"] = args.checkpoint
+        for sub in cfg["subtasks"]:
+            sub.pop("checkpoint", None)
+    if args.attempts:
+        for sub in cfg["subtasks"]:
+            sub["max_attempts"] = args.attempts
     backend = {"fake": backends.FakeBackend, "dry-run": backends.DreamcliDryRunBackend,
                "station": lambda: backends.StationBackend(cfg.get("station_url", "http://127.0.0.1:8091")),
                "client": lambda: _client_backend(cfg, dry_run=not args.client_live)}[args.backend]()

@@ -164,3 +164,22 @@ def test_report_tables(tmp_path):
     (run / "attempts.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
     out = report.report(report.load([tmp_path]))
     assert "| plug_usb | station-default | 3 | 2 | 67%" in out and "YES" in out
+
+
+def test_cli_overrides(tmp_path, monkeypatch):
+    from hillclimb import harness
+    seen = {}
+
+    class Spy(harness.Harness):
+        def run(self):
+            seen["cfg"] = self.cfg
+            return True
+
+    monkeypatch.setattr(harness, "Harness", Spy)
+    monkeypatch.setattr(harness, "build_judge", lambda cfg: None)
+    rc = harness.main(["--only", "plug_usb", "--prompt", "Plug the USB cable into the port", "--checkpoint",
+                       "dream-1-ft:x-hc-ft1", "--attempts", "1", "--logs", str(tmp_path)])
+    assert rc == 0
+    sub = seen["cfg"]["subtasks"]
+    assert len(sub) == 1 and sub[0]["prompt"] == "Plug the USB cable into the port" and sub[0]["max_attempts"] == 1
+    assert seen["cfg"]["checkpoint"] == "dream-1-ft:x-hc-ft1"
