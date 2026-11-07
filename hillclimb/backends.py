@@ -93,6 +93,9 @@ def _copy_artifacts(trace: pathlib.Path, dest: pathlib.Path) -> dict[str, Any]:
     return proprio_summary(dest / "trace.csv")
 
 
+STATUS_TIMEOUT_S = 2.0
+
+
 class StationBackend:
     """The real station. POST /start {prompt, checkpoint}, /stop, /home; GET /status (station_api.py:151-168)."""
 
@@ -101,18 +104,22 @@ class StationBackend:
             raise RuntimeError("StationBackend moves real arms: set HILLCLIMB_ALLOW_ARMS=1 with a hand on the e-stop")
         self.url, self.trace = url.rstrip("/"), trace
 
-    def _call(self, method: str, route: str, body: dict | None = None) -> dict[str, Any]:
+    def _call(self, method: str, route: str, body: dict | None = None, timeout: float = 70) -> dict[str, Any]:
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(self.url + route, data=data, method=method,
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=70) as r:  # the API itself waits up to 60 s (station_api.py:35)
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # start/stop: the API waits up to 60 s (station_api.py:35)
             return json.load(r)
 
     def start(self, prompt: str, checkpoint: str | None) -> None:
         self._call("POST", "/start", {"prompt": prompt, **({"checkpoint": checkpoint} if checkpoint else {})})
 
     def state(self) -> str:
-        return self._call("GET", "/status")["state"]
+        # /status is a local read: bound it so a stuck request can't hold up the harness's deadline (PR #2 review).
+        try:
+            return self._call("GET", "/status", timeout=STATUS_TIMEOUT_S)["state"]
+        except (TimeoutError, OSError):  # urllib wraps socket timeouts in URLError (an OSError)
+            return "unknown"
 
     def stop(self) -> None:
         self._call("POST", "/stop", {})

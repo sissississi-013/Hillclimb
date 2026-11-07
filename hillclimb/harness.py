@@ -134,6 +134,7 @@ class Harness:
             _stop_quietly(self.backend)
             raise
         self.backend.stop()
+        elapsed_s = round(self.clock() - t0, 2)  # motion time only; final judging is not policy time (PR #2 review)
         ended_at = _iso(self.wall())
         proprio = self.backend.collect(attempt_dir)
         frames = _fresh(backends.latest_frames_in(attempt_dir / "inputs"), start_wall)
@@ -144,7 +145,7 @@ class Harness:
         # The station keeps the last checkpoint a Start named, so log the one it really ran (status after the Stop).
         ran = status.get("checkpoint") if isinstance(status.get("checkpoint"), str) else checkpoint
         a = Attempt(sub["name"], k, bool(v.success), v.score, v.reason, v.source,
-                    round(self.clock() - t0, 2), end, str(attempt_dir), sub["prompt"], ran, started_at,
+                    elapsed_s, end, str(attempt_dir), sub["prompt"], ran, started_at,
                     ended_at, _station_run(attempt_dir))
         return self._finish(a, attempt_dir)
 

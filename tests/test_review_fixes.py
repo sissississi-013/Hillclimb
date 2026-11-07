@@ -354,3 +354,39 @@ def test_slow_midrun_judge_cannot_extend_the_run(tmp_path, monkeypatch):
         gate.set()
     assert called.is_set()
     assert a.end == "timeout" and a.elapsed_s <= 6
+
+
+def test_station_status_timeout_is_bounded(monkeypatch):
+    import socket
+    from hillclimb import backends
+    monkeypatch.setenv("HILLCLIMB_ALLOW_ARMS", "1")
+    be = backends.StationBackend.__new__(backends.StationBackend)
+    seen = {}
+
+    def call(method, route, body=None, timeout=70):
+        seen["timeout"] = timeout
+        raise socket.timeout("slow")
+    be._call = call
+    assert be.state() == "unknown" and seen["timeout"] <= 5
+
+
+def test_elapsed_excludes_final_judging(tmp_path):
+    import yaml
+    from hillclimb import backends, harness
+    from hillclimb.judge import Verdict
+    from tests.test_harness import CONFIG, Clock
+
+    clock = Clock()
+
+    class SlowFinal:
+        def __call__(self, sub, frames, proprio):
+            if proprio:
+                clock.t += 30  # a slow API / operator
+            return Verdict(True, 1.0, "ok", "test")
+
+    cfg = yaml.safe_load(CONFIG.read_text())
+    sub = dict(cfg["subtasks"][0], max_time_s=20, check_every_s=0)
+    be = backends.FakeBackend(clock=clock, run_s=5.0)
+    h = harness.Harness(cfg, be, SlowFinal(), tmp_path, clock=clock, sleep=clock.sleep)
+    a = h.run_attempt(0, sub, 1)
+    assert a.elapsed_s < 10
