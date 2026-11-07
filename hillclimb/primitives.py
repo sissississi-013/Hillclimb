@@ -77,6 +77,9 @@ def plan(p: Primitive, start: np.ndarray, *, hz: float = 40.0, speed_scale: floa
     joints = np.r_[0:6, 7:13]
     traj = np.clip(p.vector(), lo, hi)
     start = np.asarray(start, float)
+    bad = np.flatnonzero((start[joints] < lo[joints] - 1e-6) | (start[joints] > hi[joints] + 1e-6))
+    if bad.size:  # clamping back inside would be one unrate-limited step (PR #2 review)
+        raise ValueError(f"measured pose outside the primitive's joint limits at indices {joints[bad].tolist()}; refusing")
     gap = float(np.abs(traj[0, joints] - start[joints]).max())
     if gap > max_approach_rad:
         raise ValueError(f"first target is {gap:.2f} rad from the measured pose (> {max_approach_rad}); refusing")

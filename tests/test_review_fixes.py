@@ -279,3 +279,15 @@ def test_replay_open_failure_latches_arm_fault(tmp_path, monkeypatch):
     with pytest.raises(ArmError):
         be.play(str(tmp_path / "p.yaml"))
     assert be._arm_fault is True
+
+
+def test_primitive_rejects_start_outside_limits():
+    import numpy as np
+    import pytest
+    from hillclimb import primitives
+    z = np.zeros((2, 6)); z[:, 0] = 0.2
+    p = primitives.Primitive(fps=30, joints={"left": z, "right": np.zeros((2, 6))},
+                             gripper={"left": np.ones(2), "right": np.ones(2)}, meta={})
+    start = np.zeros(14); start[0] = 0.4
+    with pytest.raises(ValueError, match="outside"):
+        primitives.plan(p, start, hz=40, limits={"left": [[-0.1, 0.2]]})
