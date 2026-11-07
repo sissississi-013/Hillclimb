@@ -42,6 +42,9 @@ The training queue is **shared by every account** (`dream/fine_tuning.py:queue`:
 - If the queue is empty and slots are free, the 13:30 plan stands.
 - Ask the organizers whether hackathon teams have reserved slots.
 
+## Why no live Quest takeover (DAgger as recovery-from-staged-failure instead)
+A true mid-rollout takeover would need Dream's control loop (the `robots` drivers) and the kit's Quest teleop + recorder (MakerMods' LeRobot followers) to share the arms in one process. They're different driver stacks, and only one program may hold the arms (`station_lock`). Handing over between processes releases the arms, and **MakerMods arms have no brakes and go limp**, so the failure state is lost. We therefore do DAgger REBOOT-style: the harness logs the failure phase and mode, then the operator **re-creates that state under dhk-collect** and records the recovery with the same task string. Evidence says this works: RaC and REBOOT are both built on it. Revisit only if the organizers show a takeover feature at the 09:10 quick-start.
+
 ## Option: a faster first iteration (decide at 09:00 from the organizers' answer)
 If a job's training time scales with `steps`, **FT#1 at 500 steps** (~$100, maybe ~4 h) lands around **17:30** instead of ~22:00. That buys a real loop on Saturday: evaluate FT#1 → record targeted corrections → **FT#2 = `--resume-from FT#1 --steps 500`** on all data, queued by 21:30. A resumed job continues the optimizer and LR schedule, so 500+500 ≈ one 1000-step run trained on better data. **Ask:** "How does training time scale with steps? What's the queue right now? Can we run 2 jobs at once?" If 2 jobs can run in parallel, also launch a plug-only specialist.
 
