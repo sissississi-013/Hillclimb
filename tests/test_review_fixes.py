@@ -219,3 +219,32 @@ def test_client_loop_refuses_start_after_arm_fault(tmp_path, monkeypatch):
     be._arm_fault, be._thread = True, None
     with pytest.raises(RuntimeError, match="faulted"):
         be.start("unplug the usb cable from the rack", None)
+
+
+def test_human_and_confirm_judges(tmp_path):
+    from hillclimb.judge import ConfirmJudge, HumanJudge, Verdict
+    sub = {"name": "plug_usb"}
+    answers = iter(["maybe", "y"])
+    assert HumanJudge(ask=lambda q: next(answers))(sub, {}, {}).success is True
+    auto = lambda s, f, p: Verdict(True, 0.9, "looks seated", source="vlm")
+    cj = ConfirmJudge(auto, ask=lambda q: "")
+    assert cj(sub, {}, {}).success is True and not cj.disagreements          # Enter accepts
+    cj = ConfirmJudge(auto, ask=lambda q: "n")
+    v = cj(sub, {"overhead": tmp_path / "a.jpg"}, {})
+    assert v.success is False and v.source == "human" and cj.disagreements[0]["auto"] is True
+    assert cj.midrun_judge is auto                                             # mid-run never prompts
+
+
+def test_harness_judge_override_flag(tmp_path, monkeypatch):
+    from hillclimb import harness
+    from hillclimb.judge import HumanJudge
+    seen = {}
+
+    class Spy(harness.Harness):
+        def run(self):
+            seen["judge"] = self.judge
+            return True
+
+    monkeypatch.setattr(harness, "Harness", Spy)
+    assert harness.main(["--judge", "human", "--logs", str(tmp_path)]) == 0
+    assert isinstance(seen["judge"], HumanJudge)

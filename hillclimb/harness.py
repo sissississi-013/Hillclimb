@@ -36,7 +36,7 @@ from typing import Any, Callable
 import yaml
 
 from hillclimb import backends
-from hillclimb.judge import CombinedJudge, Judge, ProprioJudge, Verdict, VLMJudge
+from hillclimb.judge import CombinedJudge, ConfirmJudge, HumanJudge, Judge, ProprioJudge, Verdict, VLMJudge
 
 ENV_FILE = pathlib.Path(__file__).resolve().parents[1] / ".env"
 
@@ -110,12 +110,12 @@ class Harness:
                 if state in ("idle", "error") and elapsed > 1.0:
                     end = "run_ended" if state == "idle" else "run_error"
                     break
-                if every and self.clock() >= next_check + every:
+                if every and not getattr(self.judge, "final_only", False) and self.clock() >= next_check + every:
                     next_check = self.clock()
                     # Only this attempt's frames: until the loop opens its trace, the folder holds the LAST run's.
                     frames = _fresh(self.backend.latest_frames(), start_wall)
                     if frames:
-                        v = self.judge(sub, frames, {})
+                        v = getattr(self.judge, "midrun_judge", self.judge)(sub, frames, {})
                         if v.success:
                             end, early = "early_success", v
                             break
@@ -245,7 +245,15 @@ def build_judge(cfg: dict[str, Any]) -> Judge:
     vlm = VLMJudge(j.get("model", VLMJudge().model), j.get("threshold", 0.7),
                    reasoning_effort=j.get("reasoning_effort", "none"), max_tokens=j.get("max_tokens", 800),
                    json_mode=j.get("json_mode", True))
-    return CombinedJudge(vlm, ProprioJudge())
+    auto = CombinedJudge(vlm, ProprioJudge())
+    mode = j.get("mode", "vlm")
+    if mode == "human":
+        return HumanJudge()
+    if mode == "confirm":
+        return ConfirmJudge(auto)
+    if mode != "vlm":
+        raise ValueError(f"judge.mode {mode!r}: use vlm | confirm | human")
+    return auto
 
 
 def _client_backend(cfg: dict[str, Any], dry_run: bool) -> backends.Backend:
@@ -263,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--only", help="run only this subtask")
     p.add_argument("--prompt", help="with --only: override the prompt (zero-shot prompt search, docs/PROMPTS.md)")
     p.add_argument("--checkpoint", help="override the checkpoint for every subtask (A/B base vs fine-tunes)")
+    p.add_argument("--judge", choices=["vlm", "confirm", "human"], help="override judge.mode (human: operator y/n)")
     p.add_argument("--attempts", type=int, help="override max_attempts for every subtask (eval sweeps: use 1)")
     args = p.parse_args(argv)
     load_env(ENV_FILE)  # the RUNBOOK writes the key there
@@ -281,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg["checkpoint"] = args.checkpoint
         for sub in cfg["subtasks"]:
             sub.pop("checkpoint", None)
+    if args.judge:
+        cfg.setdefault("judge", {})["mode"] = args.judge
     if args.attempts:
         for sub in cfg["subtasks"]:
             sub["max_attempts"] = args.attempts
@@ -289,7 +300,13 @@ def main(argv: list[str] | None = None) -> int:
                                                       backends.trace_from_station_file(cfg.get("station_file"))),
                "client": lambda: _client_backend(cfg, dry_run=not args.client_live)}[args.backend]()
     try:
-        ok = Harness(cfg, backend, build_judge(cfg), pathlib.Path(args.logs)).run()
+        judge = build_judge(cfg)
+        h = Harness(cfg, backend, judge, pathlib.Path(args.logs))
+        try:
+            ok = h.run()
+        finally:
+            if getattr(judge, 'disagreements', None):  # operator overrides = labels for judge_eval / rubric fixes
+                (h.dir / 'judge_disagreements.json').write_text(json.dumps(judge.disagreements, indent=1))
     finally:
         if hasattr(backend, "close"):
             backend.close()

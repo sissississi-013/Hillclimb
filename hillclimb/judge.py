@@ -4,6 +4,9 @@
   only then score it.
 - ProprioJudge: cheap signals from the trace CSV (gripper holding something, tracking error). It can veto.
 - CombinedJudge: VLM verdict with the proprio veto applied.
+- HumanJudge: the operator types y/n after each attempt (no network; zero-shot baselines; VLM fallback).
+- ConfirmJudge: shows the automatic verdict, the operator presses Enter to accept or y/n to override; every
+  disagreement is logged as a calibration label for the VLM.
 """
 
 from __future__ import annotations
@@ -126,3 +129,41 @@ class CombinedJudge:
         # Proprio can only veto. "Not holding" is true of nearly every close_backing end, and "holding" of a gripper
         # clamped on a cable still in the port, so a VLM outage must stay unknown (= retry), never pass on proprio.
         return Verdict(None, p.score, f"{v.reason}; proprio: {p.reason or 'no opinion'}", v.source or "vlm")
+
+
+class HumanJudge:
+    """Operator verdict at the end of each attempt. `final_only`: the harness skips mid-run checks with it."""
+
+    final_only = True
+
+    def __init__(self, ask=input) -> None:
+        self.ask = ask
+
+    def __call__(self, subtask, frames, proprio) -> Verdict:
+        while True:
+            a = self.ask(f"[{subtask['name']}] success? y/n: ").strip().lower()
+            if a in ("y", "n"):
+                return Verdict(a == "y", 1.0 if a == "y" else 0.0, "operator", source="human")
+
+
+class ConfirmJudge:
+    """The automatic judge decides mid-run (early stop). At the end, the operator confirms or overrides it."""
+
+    def __init__(self, auto: Judge, ask=input) -> None:
+        self.auto, self.ask = auto, ask
+        self.midrun_judge = auto  # the harness's mid-run early-stop checks use the automatic judge, no prompt
+        self.disagreements: list[dict[str, Any]] = []
+
+    def __call__(self, subtask, frames, proprio) -> Verdict:
+        v = self.auto(subtask, frames, proprio)
+        shown = {True: "SUCCESS", False: "FAIL", None: "UNKNOWN"}[v.success]
+        a = self.ask(f"[{subtask['name']}] judge says {shown} ({v.score:.2f}: {v.reason[:80]}). Enter=accept, y/n: ")
+        a = a.strip().lower()
+        if a not in ("y", "n"):
+            return v
+        human = a == "y"
+        if human != v.success:
+            self.disagreements.append({"subtask": subtask["name"], "auto": v.success, "human": human,
+                                       "frames": {k: str(p) for k, p in frames.items()}})
+        return Verdict(human, 1.0 if human else 0.0, f"operator override (judge: {shown}; {v.reason[:120]})",
+                       source="human")
