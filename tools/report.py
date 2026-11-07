@@ -50,19 +50,19 @@ def _after(a: dict, since: str | None) -> bool:
 
 
 def report(runs: dict[str, list[dict]], since: str | None = None) -> str:
-    groups: dict[tuple[str, str], list[dict]] = collections.defaultdict(list)
+    groups: dict[tuple[str, str, str], list[dict]] = collections.defaultdict(list)
     for attempts in runs.values():
         for a in attempts:
             if _after(a, since):
-                groups[(a["subtask"], str(a.get("checkpoint") or "station-default"))].append(a)
-    out = ["| subtask | checkpoint | n | ok | rate (95% CI) | median s to ok | top failure ends |", "|---|---|---|---|---|---|---|"]
-    for (sub, ckpt), items in sorted(groups.items()):
+                groups[(a["subtask"], str(a.get("checkpoint") or "station-default"), a.get("prompt") or "")].append(a)
+    out = ["| subtask | checkpoint | prompt | n | ok | rate (95% CI) | median s to ok | top failure ends |", "|---|---|---|---|---|---|---|---|"]
+    for (sub, ckpt, prompt), items in sorted(groups.items()):
         n, k = len(items), sum(bool(a["success"]) for a in items)
         lo, hi = wilson(k, n)
         ok_t = [a["elapsed_s"] for a in items if a["success"]]
         med = f"{statistics.median(ok_t):.1f}" if ok_t else "-"
         fails = collections.Counter(a["end"] for a in items if not a["success"]).most_common(2)
-        out.append(f"| {sub} | {ckpt} | {n} | {k} | {k / n:.0%} ({lo:.0%}–{hi:.0%}) | {med} | "
+        out.append(f"| {sub} | {ckpt} | {prompt} | {n} | {k} | {k / n:.0%} ({lo:.0%}–{hi:.0%}) | {med} | "
                    f"{', '.join(f'{e}×{c}' for e, c in fails) or '-'} |")
     out += ["", "| run | full success | attempts used |", "|---|---|---|"]
     for name, attempts in sorted(runs.items()):

@@ -163,7 +163,7 @@ def test_report_tables(tmp_path):
                  started_at="2026-11-07T20:00:00.000Z") for s in (True, False, True)]
     (run / "attempts.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
     out = report.report(report.load([tmp_path]))
-    assert "| plug_usb | station-default | 3 | 2 | 67%" in out and "YES" in out
+    assert "| plug_usb | station-default |  | 3 | 2 | 67%" in out and "YES" in out
 
 
 def test_cli_overrides(tmp_path, monkeypatch):
