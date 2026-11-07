@@ -42,12 +42,19 @@ for subtask in [unplug_usb, open_backing, close_backing, plug_usb]:
 - **Judge:** the VLM (Fireworks) first describes the scene, then scores it against a **frozen rubric per subtask**. Rewording the prompt can flip the verdict (2609.05401). Use 2+ camera views (overhead + the active wrist). Add a cheap second signal: gripper width or stall shows whether the cable is held, and a joint-current spike shows whether the plug seated.
 - **Policy escalation:** for each subtask, pick whichever model (base, FT#1, FT#2) or scripted primitive scores best on our own test runs. Selection is decided by real runs, not training loss (1X).
 - **Scripted fallback (if the rules allow):** a small spiral or wiggle plus press for the last few mm of USB insertion. Use `metal-arm-harness`'s `tip`/`nudge`.
-- Code: `hillclimb/` (harness.py, judge.py, config.yaml) — being written against the real `dreamlabs` client API; see `docs/research/05-dream-client-api.md`.
+- Code: `hillclimb/` — `python -m hillclimb.harness --backend fake|dry-run|station [--only plug_usb]`. The station backend drives `dreamcli robot up`'s local API (127.0.0.1:8091) and needs `HILLCLIMB_ALLOW_ARMS=1`; a human runs it with a hand on the e-stop. Logs go to `logs/harness/<run>/attempts.jsonl`.
+- `home` recovery opens the grippers, so plug_usb retries from where it is (`recovery: none`).
+- Questions to add for 08:00: may scored runs use `dreamcli robot up` + our harness? Is `rollouts: enabled` allowed in the station file?
 
-## Innovation bets (try once the basics work)
-- **Use the world model as a failure detector.** Dream-1 jointly predicts future frames. If the API exposes the predicted frames, compare predicted vs. actual: a large divergence means early failure, so retry before the subtask times out. _(Check in 05 whether the client returns predicted video.)_
-- **Failure-state curriculum:** the harness logs where each attempt failed. Operators record recovery demos starting from exactly those states, so FT#2 learns from our real failure distribution.
-- **Per-subtask execution horizon and speed**, tuned by real runs (phase-aware replanning took one robot from 51% to 70%, 2606.00537).
+## Our edge (the "data engine")
+**Nothing in Dream's stack detects success or ends an episode** (05 §0). Every team gets the same model. The winner is the team that gets the most out of each robot-minute. Our loop:
+1. **Judged autonomous runs.** The harness runs the policy subtask by subtask. Every attempt gets a VLM + proprio verdict and is logged.
+2. **Filtered self-rollouts → training data.** With `rollouts: {enabled: true}` in the station file, every policy run is saved as a LeRobot episode. `tools/harvest.py` keeps only the **judged-successful** runs, re-labels them with the frozen subtask prompt, and adds them to the FT#2 dataset. That is expert iteration: robot time spent evaluating also produces training data. _(06-harvest.md: compatibility with add_eef/FaaS — TODO verify.)_
+3. **Failure-state curriculum.** Logged failures tell operators which states to stage for recovery demos (same task string).
+4. **Per-subtask control knobs** via our own `DreamClient` loop (`--backend client`): short execution horizon during insertion (phase-aware replanning: 51%→70%, 2606.00537), long in free space, IK `keep_out` around the rack. _(Only if the organizers allow a custom loop in scored runs.)_
+5. **Policy escalation per subtask:** base vs FT#1 vs FT#2, chosen by our own logged success rates.
+
+_Dropped:_ world-model divergence as a failure detector. `get_action` returns no predicted frames (05 §0).
 
 ## Questions for organizers at 08:00 (must-ask)
 1. The scoring rubric: partial credit per subtask? Time limit? Number of attempts, best-of or average? Tiebreaker?
@@ -59,7 +66,7 @@ for subtask in [unplug_usb, open_backing, close_backing, plug_usb]:
 7. Final leaderboard deadline and when the stage attempts happen.
 
 ## Roles (5-person team)
-- **Operator A / B** — Quest teleop, one written strategy (`docs/DEMO-PROTOCOL.md`, TODO).
+- **Operator A / B** — Quest teleop, one written strategy (`docs/DEMO-PROTOCOL.md`).
 - **Curator** — dashboard playback, drops bad episodes, runs add_eef/finetune, owns the credits.
 - **Harness lead** — `hillclimb/` state machine + recovery, on the base model all day.
 - **Judge/eval lead** — VLM judge, eval logs, per-subtask success table, model selection.
