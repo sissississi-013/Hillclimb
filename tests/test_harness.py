@@ -151,3 +151,16 @@ def test_attempt_records_wall_clock_prompt_and_station_run(tmp_path):
     assert rec["started_at"] == "2023-11-14T22:13:20.000+00:00"
     assert rec["ended_at"] == "2023-11-14T22:13:32.500+00:00"
     assert rec["prompt"] == cfg["subtasks"][0]["prompt"] and rec["station_run"] == 7
+
+
+def test_report_tables(tmp_path):
+    import json, sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
+    import report
+    run = tmp_path / "r1"
+    run.mkdir()
+    rows = [dict(subtask="plug_usb", success=s, elapsed_s=10.0, end="timeout", checkpoint=None,
+                 started_at="2026-11-07T20:00:00.000Z") for s in (True, False, True)]
+    (run / "attempts.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    out = report.report(report.load([tmp_path]))
+    assert "| plug_usb | station-default | 3 | 2 | 67%" in out and "YES" in out
