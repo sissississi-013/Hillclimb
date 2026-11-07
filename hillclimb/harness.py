@@ -14,6 +14,8 @@ Each attempt does these steps:
 python -m hillclimb.harness --config hillclimb/config.yaml                     # fake backend (default)
 python -m hillclimb.harness --config hillclimb/config.yaml --backend dry-run   # dreamcli --dry-run, arms never move
 HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness ... --backend station       # REAL ARMS
+HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness ... --backend client        # our loop, dry: arms opened, never written
+HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness ... --backend client --client-live   # our loop, REAL ARMS
 """
 
 from __future__ import annotations
@@ -43,13 +45,20 @@ class Attempt:
     elapsed_s: float
     end: str  # "early_success" | "timeout" | "run_ended" | "run_error"
     dir: str
+    # For tools/harvest.py: pairs this attempt with its rollout episode (rollout.json task/started_at_utc/run).
+    prompt: str = ""
+    checkpoint: str | None = None
+    started_at: str = ""  # UTC wall clock just before the Start call, ISO 8601 with ms
+    ended_at: str = ""  # UTC wall clock just after the Stop call
+    station_run: int | None = None  # the station's run ordinal (/status `run`, station.py:778), when it answers one
 
 
 class Harness:
     def __init__(self, cfg: dict[str, Any], backend: backends.Backend, judge: Judge, log_root: pathlib.Path,
-                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> None:
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+                 wall: Callable[[], float] = time.time) -> None:
         self.cfg, self.backend, self.judge = cfg, backend, judge
-        self.clock, self.sleep = clock, sleep
+        self.clock, self.sleep, self.wall = clock, sleep, wall
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.dir = log_root / stamp
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -67,7 +76,9 @@ class Harness:
         max_time = sub.get("max_time_s", d.get("max_time_s", 30))
         every = sub.get("check_every_s", d.get("check_every_s", 0))
         attempt_dir = self.dir / f"{index:02d}-{sub['name']}-a{k}"
-        self.backend.start(sub["prompt"], sub.get("checkpoint", self.cfg.get("checkpoint")))
+        checkpoint = sub.get("checkpoint", self.cfg.get("checkpoint"))
+        started_at = _iso(self.wall())
+        self.backend.start(sub["prompt"], checkpoint)
         t0 = next_check = self.clock()
         end, early = "timeout", None
         while (elapsed := self.clock() - t0) < max_time:
@@ -85,13 +96,15 @@ class Harness:
                         break
             self.sleep(self.cfg.get("poll_s", 0.5))
         self.backend.stop()
+        ended_at = _iso(self.wall())
         proprio = self.backend.collect(attempt_dir)
         frames = backends.latest_frames_in(attempt_dir / "inputs")
         v = self.judge(sub, frames, proprio) if end != "run_error" else Verdict(False, reason="run error")
         if early is not None and v.success is None:
             v = early
         a = Attempt(sub["name"], k, bool(v.success), v.score, v.reason, v.source,
-                    round(self.clock() - t0, 2), end, str(attempt_dir))
+                    round(self.clock() - t0, 2), end, str(attempt_dir), sub["prompt"], checkpoint, started_at,
+                    ended_at, _station_run(attempt_dir))
         (attempt_dir / "verdict.json").write_text(json.dumps(dataclasses.asdict(a), indent=1))
         self._log(a)
         return a
@@ -122,15 +135,34 @@ class Harness:
         return all(any(a.success for a in self.attempts if a.subtask == s["name"]) for s in self.cfg["subtasks"])
 
 
+def _iso(t: float) -> str:
+    return datetime.datetime.fromtimestamp(t, datetime.timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _station_run(attempt_dir: pathlib.Path) -> int | None:
+    try:  # StationBackend.collect() saves /status after the Stop; its `run` names the rollout folder's _run<N>
+        run = json.loads((attempt_dir / "status.json").read_text()).get("run")
+    except (OSError, ValueError):
+        return None
+    return run if isinstance(run, int) else None
+
+
 def build_judge(cfg: dict[str, Any]) -> Judge:
     j = cfg.get("judge", {})
     return CombinedJudge(VLMJudge(j.get("model", VLMJudge().model), j.get("threshold", 0.7)), ProprioJudge())
 
 
+def _client_backend(cfg: dict[str, Any], dry_run: bool) -> backends.Backend:
+    from hillclimb.client_loop import ClientLoopBackend  # imports `robots` only when built
+
+    return ClientLoopBackend(cfg, dry_run=dry_run)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--config", default=str(pathlib.Path(__file__).with_name("config.yaml")))
-    p.add_argument("--backend", choices=["fake", "dry-run", "station"], default="fake")
+    p.add_argument("--backend", choices=["fake", "dry-run", "station", "client"], default="fake")
+    p.add_argument("--client-live", action="store_true", help="client backend: write the motors (default: dry)")
     p.add_argument("--logs", default="logs/harness")
     p.add_argument("--only", help="run only this subtask")
     args = p.parse_args(argv)
@@ -138,8 +170,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.only:
         cfg["subtasks"] = [s for s in cfg["subtasks"] if s["name"] == args.only]
     backend = {"fake": backends.FakeBackend, "dry-run": backends.DreamcliDryRunBackend,
-               "station": lambda: backends.StationBackend(cfg.get("station_url", "http://127.0.0.1:8091"))}[args.backend]()
-    ok = Harness(cfg, backend, build_judge(cfg), pathlib.Path(args.logs)).run()
+               "station": lambda: backends.StationBackend(cfg.get("station_url", "http://127.0.0.1:8091")),
+               "client": lambda: _client_backend(cfg, dry_run=not args.client_live)}[args.backend]()
+    try:
+        ok = Harness(cfg, backend, build_judge(cfg), pathlib.Path(args.logs)).run()
+    finally:
+        if hasattr(backend, "close"):
+            backend.close()
     print("TASK", "SUCCESS" if ok else "FAILED")
     return 0 if ok else 1
 

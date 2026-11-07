@@ -128,3 +128,26 @@ def test_prompts_match_demo_protocol():
     frozen = set(re.findall(r"\| `([a-z][^`]+)` \|", protocol))
     for sub in cfg["subtasks"]:
         assert sub["prompt"] in frozen, sub["prompt"]
+
+
+def test_attempt_records_wall_clock_prompt_and_station_run(tmp_path):
+    clock = Clock()
+    walls = iter([1_700_000_000.0, 1_700_000_012.5])
+    be = backends.FakeBackend(clock=clock, run_s=5.0)
+    collect = be.collect
+
+    def collect_with_status(dest):
+        out = collect(dest)
+        (dest / "status.json").write_text(json.dumps({"run": 7}))
+        return out
+
+    be.collect = collect_with_status
+    cfg = yaml.safe_load(CONFIG.read_text())
+    cfg["subtasks"] = cfg["subtasks"][:1]
+    h = harness.Harness(cfg, be, Scripted({"unplug_usb": [True]}), tmp_path, clock=clock, sleep=clock.sleep,
+                        wall=lambda: next(walls))
+    assert h.run()
+    rec = json.loads((h.dir / "attempts.jsonl").read_text().splitlines()[0])
+    assert rec["started_at"] == "2023-11-14T22:13:20.000+00:00"
+    assert rec["ended_at"] == "2023-11-14T22:13:32.500+00:00"
+    assert rec["prompt"] == cfg["subtasks"][0]["prompt"] and rec["station_run"] == 7

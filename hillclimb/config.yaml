@@ -1,6 +1,7 @@
 # Hill Climb rack task. One Dream episode per subtask. Prompts are frozen: if a fine-tune was recorded with
 # --task text, use that exact text here (docs/running_your_model.md:22).
 # MUST match docs/DEMO-PROTOCOL.md task strings verbatim (tests/test_harness.py checks this).
+station_file: ~/.dreamlabs/station.yaml   # --backend client reads arms/cameras/caps from it. TODO(event): confirm
 station_url: http://127.0.0.1:8091     # `dreamcli robot up` API (robots/station.py:97). Station-local only.
 checkpoint: null                        # null = the station file's model. TODO(event): base id from get_models(), else dream-1-ft:...
 poll_s: 0.5
@@ -16,15 +17,30 @@ defaults:
   max_attempts: 3
   recovery: home          # home | none
   on_fail: abort          # abort | continue
-  # Execution horizon is NOT a knob of this backend. dreamcli/station never set it, so it is the client default of
-  # 30 rows = 1.5 s at 20 Hz (dream/pacing.py:49, robots/run.py:421-515). A per-subtask horizon needs our own
-  # DreamClient loop (policy({"execution_horizon": N})). TODO(event).
+  # Read only by --backend client (hillclimb/client_loop.py). The station/dry-run backends ignore it: they always run
+  # the client default of 30 rows = 1.5 s at 20 Hz (dream/pacing.py:49, robots/run.py:421-515).
+  # A subtask's `client:` overrides keys here; `ik` merges one level deep.
+  client:
+    execution_horizon: 30   # rows of each chunk run before the next takes over (1..48)
+    always_async: false     # true: re-plan every horizon rows even on a slow link (no sync "run all 48")
+    speed_scale: 1.0        # 0.5..1.0: slows row playback and the EE speed cap together. Never above the station's
+    sync_above_ms: null     # null = the station's 900 ms
+    ik:
+      solve: traj           # traj | tick (traj is the station default)
+      # keep_out boxes are ADDED to the station file's, per arm, in that arm's base frame (metres, full extent):
+      #   keep_out: {left: [{kind: box, center: [x, y, z], size: [x, y, z]}], right: [...]}
+      # TODO(event): measure the rack body in each arm's base frame and add it here (both arms).
+      keep_out: {}
+      # region: per arm {lo: [x, y, z], hi: [x, y, z]}, null = open face. Replaces the station file's for that arm.
+      # TODO(event): a box around each arm's half of the rack front/back.
+      region: {}
 
 subtasks:
   - name: unplug_usb
     prompt: "unplug the usb cable from the rack"
     max_time_s: 25
     proprio: {expect_holding: true}      # the pulled cable should still be in a gripper
+    client: {execution_horizon: 10, always_async: true, speed_scale: 0.8}   # contact: ~0.5 s prefixes
     rubric:
       success: "the USB plug is fully out of the rack port and is held by a gripper or lies clear of the rack"
       failure: "plug still in the port, or only partly out; gripper empty next to the port"
@@ -32,6 +48,7 @@ subtasks:
     prompt: "open the rack back panel"
     max_time_s: 30
     proprio: {expect_holding: null}
+    client: {execution_horizon: 20}      # hinge/latch contact, but larger motions. TODO(event): A/B 12 vs 30
     rubric:
       success: "the rack backing/panel is clearly open, with the inside of the rack visible"
       failure: "panel still closed or only ajar; panel knocked off or dropped"
@@ -39,6 +56,7 @@ subtasks:
     prompt: "close the rack back panel"
     max_time_s: 30
     proprio: {expect_holding: false}
+    client: {execution_horizon: 20}
     rubric:
       success: "the rack backing/panel is fully closed and flush, with no gap"
       failure: "panel still open or ajar; gripper still pushing it"
@@ -47,6 +65,7 @@ subtasks:
     max_time_s: 40
     recovery: none          # homing opens the grippers and drops the cable
     max_attempts: 4
+    client: {execution_horizon: 8, always_async: true, speed_scale: 0.7}    # insertion: ~0.4 s prefixes, slower
     proprio: {expect_holding: null}
     rubric:
       success: "a USB plug is fully seated in the rack port with no metal visible, and the gripper has released it or is about to"
