@@ -120,3 +120,21 @@ Read on 2026-11-07 from the source alone. Nothing was imported or executed. Path
 - The thresholds for `holding()`: 0.15 cmd and 0.06 measured.
 - Whether the serve returns extra keys in the action (for example video).
 - Whether `/home` in recovery is acceptable under the scoring rules.
+
+## 9. Our client loop backend (`hillclimb/client_loop.py`, `--backend client`)
+**What it is.** Route (c) from §0. It is our own episode loop on a `dream.DreamClient`, built from the station's own pieces: `robots.config.load(~/.dreamlabs/station.yaml)`, `run.policy_config`/`loop_settings`, `run.make_cameras`/`make_kinematics`, `bodies.open_arm`, `run.DryRun`, `station.warm_client_ik`, `home.return_to_home` and `control.ControlLoop`. We call `ControlLoop.step()` once per tick ourselves instead of `loop.run()`. So the vendor code still does the ramp, the EE-speed clamp, the gripper step, the stall and first-chunk limits, SafetyStop and the hold/disengage on exit. The drivers still apply the Metal soft joint limits (R/motor_arm.py:345-350).
+
+**What changes vs dreamcli/station:**
+- **Per-subtask `execution_horizon`** goes into `policy()`. Today it is 30 everywhere (§4).
+- **`always_async`** (our `PrefixPacer`) re-plans every N rows even when the median RTT is above 900 ms. The client would otherwise go sync and play all 48 rows (C/pacing.py:24-29). In practice a chunk runs about max(N, RTT×20 Hz) rows, so the floor is ~0.5 s at 500 ms RTT.
+- **IK `keep_out` boxes** from `config.yaml` are *added* to the station file's. A per-arm `region` replaces the station file's for that arm. `solve` is per subtask.
+- **`speed_scale`** (0.5–1.0) lowers `control_hz` (row playback), `action_hz` and `max_ee_speed_m_s` together. It can never raise a cap.
+- **The stop condition** runs after every tick and sees the state, frames and TickSnapshot (`stop_when(Tick)`). The trace goes to `~/.dreamlabs/hillclimb-client.csv`, so the station's own trace is left alone.
+- **Safety gates.** It refuses to start without `HILLCLIMB_ALLOW_ARMS=1`. It is dry by default: arms are opened read-only and wrapped in `DryRun`, the model is called for real, and it never homes. `--client-live` writes the motors. It takes the `arms.lock` as "dreamcli robot run", so it refuses while `dreamcli robot up` holds the arms. After an `ArmError` it never homes. On exit it homes (live) and then switches the arms off.
+
+**Risks:**
+1. **The organizers may not allow a custom loop in scored runs** (PLAYBOOK question 2). Ask before relying on it. The station backend stays the fallback.
+2. Short horizons mean ~2× more `get_action` calls: rate limit (~1 per 0.7 s, doc 01) and cost. Watch for `rate_limited`; the loop backs off with `retry_after_s`.
+3. It depends on unpinned internals of `robots` 1.0.37 (`ControlLoop.step`, `state`/`video`/`tick`, `run.DryRun`, `station.warm_client_ik`). TODO(event): run `pip show dreamlabs` on the station and do one dry run before going live.
+4. It is untested on hardware. Only fakes have run it. A lower `control_hz` changes the seam timing and the ramp, so A/B `speed_scale` in dry mode first.
+5. The keep_out/region boxes are TODO(event) placeholders. A wrong `region` makes the IK hold the arm, which looks like a stall.
