@@ -12,6 +12,7 @@ Runs ON THE STATION in ~/dream-env (needs the `dream` client + the team API key 
     # poll / list
     ~/dream-env/bin/python tools/ft.py status ftj_...
     ~/dream-env/bin/python tools/ft.py models
+    ~/dream-env/bin/python tools/ft.py prompts dream-1-ft:<uid8>-hc-ft1   # verify harness prompts match training
 
 Facts from dreamlabs-client 1.1.3 `DreamClient.finetune` docstring (dream/facade.py:312-398):
 - steps: multiple of 100 in [500, 2000]; default 1000. Price + time scale with steps.
@@ -104,6 +105,15 @@ def cmd_status(args: argparse.Namespace) -> None:
         time.sleep(60)
 
 
+def cmd_prompts(args: argparse.Namespace) -> None:
+    """The task texts a fine-tune was trained on (dream/fine_tuning.py:training_data). Harness prompts must match
+    these verbatim, or the client warns that the model was never trained to follow them (dream/trained_inputs.py)."""
+    info = dream.fine_tuning.training_data(args.model)
+    print("cameras:", info.get("cameras"))
+    for task in info.get("prompts", []):
+        print("prompt:", repr(task))
+
+
 def cmd_models(_: argparse.Namespace) -> None:
     for model in dream.DreamClient().get_models():
         print(model)
@@ -132,6 +142,9 @@ def main() -> None:
     s.add_argument("--watch", action="store_true")
     s.set_defaults(fn=cmd_status)
     sub.add_parser("models").set_defaults(fn=cmd_models)
+    pr = sub.add_parser("prompts", help="task texts a fine-tune was trained on")
+    pr.add_argument("model")
+    pr.set_defaults(fn=cmd_prompts)
     args = p.parse_args()
     if args.cmd == "launch" and args.dataset is None and args.dataset_name is None:
         p.error("give a dataset folder or --dataset-name")

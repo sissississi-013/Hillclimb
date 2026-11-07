@@ -46,7 +46,7 @@ mkdir -p ~/hackathon_data/hc-ft1 && mv ~/hackathon_data/hc-*-eef ~/hackathon_dat
 ~/dream-env/bin/python ~/Hillclimb/tools/ft.py check ~/hackathon_data/hc-ft1
 ~/dream-env/bin/python ~/Hillclimb/tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000   # constant LR, paid
 ```
-Post the job id on issue #1. While it trains: harness tuning on the base model, recovery demos, harvesting (PLAYBOOK § Our edge).
+Post the job id on issue #1. **When the model lands:** `tools/ft.py prompts <model>` and check that every `hillclimb/config.yaml` prompt appears there verbatim. A prompt that doesn't match is one the fine-tune never learned (`dream/trained_inputs.py`). While it trains: harness tuning on the base model, recovery demos, harvesting (PLAYBOOK § Our edge).
 
 ## Harness backends cheat-sheet
 | backend | moves arms? | use |
