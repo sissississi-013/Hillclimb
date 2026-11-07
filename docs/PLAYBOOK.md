@@ -4,24 +4,29 @@ _Living doc. Owner: research/claude-scout. Last update: 2026-11-07 ~04:30 PST. S
 _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 
 ## TL;DR (read this if nothing else)
-1. **The clock is set by the fine-tune queue, not by us.** One Dream-1 fine-tune takes about 7–8 h of training, plus queue time, plus up to 1 h before the model first answers. It can't be cancelled and costs $200 for 1000 steps. **That gives us 2 shots:** FT#1 queued by **~13:00 Sat**, then FT#2 (`resume_from` FT#1, adding correction data) queued by **~23:00 Sat**, ready Sun morning.
+1. **The clock is set by the fine-tune queue, not by us.** One Dream-1 fine-tune takes about 7–8 h of training, plus queue time, plus up to 1 h before the model first answers. It can't be cancelled and costs $200 for 1000 steps. **That gives us 2 shots:** FT#1 queued by **~13:30 Sat** (arms only open at 10:00). FT#2 must be queued **before the venue closes at 22:00 Sat**: resume from FT#1 if it's done, otherwise a fresh run on all data. It's ready Sunday morning, and submissions are due **15:00 Sun**.
 2. **Split the task into subtasks; don't use one long prompt.** The prompt is fixed for each Dream episode. The harness runs 4 short episodes, one per subtask, each with its own fixed prompt: `unplug_usb → open_backing → close_backing → plug_usb`. Each subtask has its own success check, capped retries and a recovery move. Splitting one connector task this way took it from ≤10% to 100% (arXiv 2610.40828).
 3. **Put data into the weak skills.** Dream-1 zero-shot: insert&fit 24%, open&close 16%. Most demos go to **plug_usb** and **open_backing**. Record one dataset folder per subtask, each with its own `--task` text, and train one multi-task fine-tune.
 4. **Corrections beat more clean demos.** Run the policy, and when it's about to fail, record a demo that starts from that failure state and recovers. This is about 10× more data-efficient (RaC 2509.07953; Dyna went from 80% to 99.4%). The organizers explicitly name "fine-tuning, DAgger, System-2 harness".
 5. **Clean, consistent data.** One written strategy for all operators. Trim idle time at the start and end. Discard sloppy demos with B. Never move the cameras. 10–30 s per episode.
 6. **Free accuracy from the IK and execution settings:** `keep_out` boxes around the rack body, a `region` box per arm, `solve:"traj"`. Execute **short chunk prefixes during contact** (~0.4 s) and longer ones (~1–1.5 s) in free space.
 
-## Timeline (Sat Nov 7 → Sun Nov 8, PST)
+## Timeline (official schedule in `context/schedule.md`; PST)
+**Hard constraints:** rules at 09:00 · **arms + station booking from 10:00** · venue closes **22:00 Sat** · reopens 10:00 Sun · **submissions due 15:00 Sun** (then live scored attempts on stage).
+
 | When | Who | What |
 |---|---|---|
-| 08:00–09:00 | everyone | Get the rules (see questions below). SSH into the station, `--dry-run`, read `dreamcli` zero-shot on each subtask. **Measure the zero-shot baseline per subtask** (5 tries each). |
-| 09:00–12:30 | 2 operators + 1 curator | **Data sprint 1**: ~40–60 demos for plug_usb, ~40 for open_backing, ~25 each for unplug/close, + ~5 full runs. The curator watches dashboard playback live and drops bad episodes. |
-| 12:30–13:00 | curator | `add_eef.py --arm metal` per folder → parent folder → `finetune.py --check` → **queue FT#1** (confirm credits with organizers and Sissi first). Settings: `tools/ft.py launch ... --steps 1000` → **`lr_schedule constant` (NOT cosine — cosine models cannot be resumed)**, `base_share 0.5`. |
-| 13:00–22:00 | harness team | Build and tune the harness on the **base** model: success judge, retries, recovery, IK safety boxes, execution horizon per subtask. Log every failure state. |
-| 13:00–22:00 | operators | **Recovery-data sprint**: start demos from the logged failure states (cable dropped, plug misaligned, panel half-open). Add more plug_usb demos with varied cable start poses. |
-| ~22:00 | all | FT#1 ready → A/B against base on each subtask (≥10 tries each). Pick per-subtask which model to use (policy escalation). |
-| ~23:00 | curator | **Queue FT#2** = `tools/ft.py launch hc-ft2 --resume-from <FT#1> --steps 500` on (FT#1 data + recovery + correction data). Charged only for new steps (~$100); fewer steps → faster turnaround (TODO(event): ask organizers how training time scales). base_share/lr/use_eef inherit from FT#1. |
-| Sun AM | all | FT#2 ready → final per-subtask model selection, harness tuning, many full scored-style runs. Push the leaderboard. |
+| **09:00** | everyone, **on time** | Kickoff: rules + scoring → `context/rules.md`. Ask the organizer questions (below). |
+| 09:10–09:50 | split | Quick-starts (arms, Dream-1 API). Declare the **Hill Climb** track at 09:50. |
+| **10:00 sharp** | 1 person | **Book stations the moment booking opens: as many early slots as allowed**, plus a Sat-evening slot (eval FT#1) and Sun 10:00–14:30 slots. |
+| 10:00–10:40 | harness lead + operator | Bring-up (RUNBOOK), zero-shot baseline with `--judge confirm`, prompt search, freeze prompts. |
+| 10:40–13:15 | 2 operators + curator | **Data sprint 1** (DEMO-PROTOCOL budget). The curator QA's live. |
+| **≤13:30** | curator (+ Sissi's OK) | `rehearse_pipeline.sh --parent hc-ft1` → `ft.py launch` **FT#1** (1000 steps, constant LR, base_share 0.5) → ready **~21:00–22:00**. |
+| 13:30–21:30 | harness team | Tune the harness on the **base** model: judge `scene` notes + judge_eval, retries, recovery, `pre:` primitives, horizons. Every run is logged (rollouts on). |
+| 13:30–21:30 | operators | Recovery demos from logged failure states (1:1 with expert), precision-phase plug demos, harvest judged successes. |
+| **≤21:30** | curator | **Queue FT#2 before the venue closes.** If FT#1 is done and passes a quick check: `--resume-from FT#1 --steps 500`. **Otherwise launch FT#2 from base on ALL data (1000 steps).** No waiting on FT#1. Ready Sun ~05:00–07:00. |
+| Sun 10:00–14:30 | all | A/B base / FT#1 / FT#2 per subtask (`report.py`), pick per-subtask checkpoints, harness polish, many full runs. Freeze config by 14:30. |
+| **Sun 15:00** | — | Submission due. Live scored attempts. |
 
 ## Per-subtask tactics (evidence → action)
 | Subtask | Expected difficulty | Tactics |

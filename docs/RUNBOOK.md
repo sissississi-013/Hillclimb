@@ -1,15 +1,17 @@
-# RUNBOOK: first 90 minutes at the station (Sat Nov 7)
+# RUNBOOK: first hours at the station (Sat Nov 7)
 
-Goal: by **09:30** we have a measured zero-shot baseline per subtask, frozen strategy and task strings, and demos flowing. By **~12:30** FT#1 is queued.
+**Official schedule (`context/schedule.md`):** 09:00 kickoff with rules and scoring. **10:00 hacking + station booking open.** Venue closes 22:00. Sun submissions due 15:00. Shift every time below by the real kickoff: what used to start at 08:00 now starts at 09:00 (rules), and arm work starts at 10:00.
+
+Goal: by **10:40** we have a measured zero-shot baseline per subtask, frozen strategy and task strings, and demos flowing. By **~13:30** FT#1 is queued.
 Safety: everything that moves an arm is run by a **human with a hand on the e-stop**. Agents only print commands.
 
-## 08:00 — rules + logistics (whole team, 15 min)
+## 09:00 — rules + logistics (whole team, during kickoff) · 10:00 — BOOK STATIONS
 - [ ] Ask the questions in `PLAYBOOK.md` § Questions. **Paste the answers into `context/rules.md` and push.** Every agent reads it.
 - [ ] Get: station login, booking slots, team API key / credits, base checkpoint id, station internet (Fireworks reachable?).
 - [ ] Photograph the rig: rack, port, panel, cable start, camera mounts → `context/rig/`.
 - [ ] Freeze the 4 task strings. If you edit them, change `docs/DEMO-PROTOCOL.md` and `hillclimb/config.yaml` together. The test `test_prompts_match_demo_protocol` enforces this.
 
-## 08:15 — station bring-up (harness lead)
+## 10:00 — station bring-up (harness lead)
 ```bash
 # laptop
 ssh -L 8080:localhost:8080 <user>@<station>
@@ -23,7 +25,7 @@ bash tools/api_check.sh                                                       # 
 ~/dream-env/bin/python -c "import dream; print([m.id for m in dream.DreamClient().get_models()])"   # → base checkpoint id → config.yaml
 ```
 
-## 08:25 — zero-shot baseline (operator on e-stop + eval lead)
+## 10:10 — zero-shot baseline (operator on e-stop + eval lead)
 ```bash
 source ~/dream-env/bin/activate
 # 1) dry: model called, arms never move
@@ -39,13 +41,13 @@ HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness --backend station --only unpl
 - [ ] **Calibrate the judge on OUR rig (eval lead, ~15 min, ~40 Fireworks calls).** Write a one-line `rubric.scene` per subtask in `hillclimb/config.yaml` saying what is where (which block is the port, what seated looks like). Without it, the judge looked at the wrong part and gave confident false successes (07-judge-eval.md). Save ~20 pos + ~20 neg frames per subtask from the baseline runs into `evals/judge/<subtask>/{pos,neg}/<sample>/<cam>.jpg`, then run `python tools/judge_eval.py evals/judge`. Target: **0 false successes**. Missed successes only cost a retry.
 - [ ] Re-weight the demo budget in `DEMO-PROTOCOL.md` toward the worst subtask.
 
-## 08:35 — zero-shot prompt search (`docs/PROMPTS.md`, ~20 min), then freeze prompts
+## 10:25 — zero-shot prompt search (`docs/PROMPTS.md`, ~20 min), then freeze prompts
 
-## 08:50 — demo sprint 1 starts (operators + curator)
+## 10:40 — demo sprint 1 starts (operators + curator)
 Follow `docs/DEMO-PROTOCOL.md`. Order: **plug_usb → open_backing → unplug_usb → close_backing → full**. The curator keeps a tally and drops bad episodes from the dashboard.
 - [ ] Set `rollouts: {enabled: true}` in `~/.dreamlabs/station.yaml` (if the organizers allow it) so every policy run from now on is logged for `tools/harvest.py`.
 
-## ~12:30 — queue FT#1 (curator + Sissi's OK)
+## ≤13:30 — queue FT#1 (curator + Sissi's OK)
 Rehearsed offline: `docs/research/09-pipeline-rehearsal.md`. Do a free dry run at ~12:00 (`tools/rehearse_pipeline.sh`, no args) so a surprise costs nothing.
 ```bash
 cd ~/Hillclimb

@@ -1,4 +1,4 @@
-# Zero-shot prompt search (08:30, before demos are recorded)
+# Zero-shot prompt search (~10:25, before demos are recorded)
 
 **Why:** fine-tuning starts from the base model's language grounding, and the fine-tune follows the exact task text its demos were recorded with (`dream/trained_inputs.py`). So: (1) find the phrasing the **base** model already acts on best, (2) record every demo with that phrasing, (3) freeze it. A cheap gain before spending any data.
 
