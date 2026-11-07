@@ -36,6 +36,9 @@ _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 | **close_backing** | medium | Push from a fixed point until flush, then retract. Replay is likely enough. Judge needs a `scene` note for what "flush/latched" looks like. |
 | **plug_usb** | **hardest, decides the leaderboard** | Keep the plug orientation consistent (USB-A is keyed). Use `pre:` hover ~2 cm in front of the port, then Dream-1 with a short execution horizon (client backend). Recovery = retract, re-align, re-approach; never push through a jam. Gripper-only retry: `recovery: none`, so we don't home and drop the cable. 50–60 demos + 1:1 recovery demos + ~10 precision-phase demos. |
 
+## Option: a faster first iteration (decide at 09:00 from the organizers' answer)
+If a job's training time scales with `steps`, **FT#1 at 500 steps** (~$100, maybe ~4 h) lands around **17:30** instead of ~22:00. That buys a real loop on Saturday: evaluate FT#1 → record targeted corrections → **FT#2 = `--resume-from FT#1 --steps 500`** on all data, queued by 21:30. A resumed job continues the optimizer and LR schedule, so 500+500 ≈ one 1000-step run trained on better data. **Ask:** "How does training time scale with steps? What's the queue right now? Can we run 2 jobs at once?" If 2 jobs can run in parallel, also launch a plug-only specialist.
+
 ## Fine-tune gotchas (verified in dreamlabs-client 1.1.3 `facade.py:312-398`)
 - `resume_from` requires the parent model to have used the **constant** LR schedule, with the same lr, batch size and use_eef. **FT#1 must be constant.** The kit's `finetune.py` exposes none of `steps`, `base_share` or `resume_from`. Use **`tools/ft.py`** for those.
 - `steps` must be a multiple of 100 in [500, 2000]. A resumed job is charged only for its new steps.
@@ -80,7 +83,7 @@ _Dropped:_ world-model divergence as a failure detector. `get_action` returns no
 ## Questions for organizers at 08:00 (must-ask)
 1. The scoring rubric: partial credit per subtask? Time limit? Number of attempts, best-of or average? Tiebreaker?
 2. Are our own control loop + VLM API + scripted moves allowed during **scored** runs? Can a human reset or touch anything between subtasks?
-3. Fine-tune credits per team? Is there a priority queue for the event? Can they keep our model warm?
+3. Fine-tune credits per team? **How does training time scale with steps (500 vs 1000)?** Current queue length? How many concurrent jobs? Is there a priority queue for the event? Can they keep our model warm?
 4. Are scored runs on the same station and prop we collect on? USB type (A/C) and orientation? What kind of panel (hinge/latch/slide)? What counts as "plugged"?
 5. Is Dream-1-flash available? Which base checkpoint id should we use?
 6. Can we scp datasets off the station? Does the station have internet access for our harness (Fireworks)?
