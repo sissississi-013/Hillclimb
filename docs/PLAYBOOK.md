@@ -23,6 +23,14 @@ _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 | ~23:00 | curator | **Queue FT#2** = `tools/ft.py launch hc-ft2 --resume-from <FT#1> --steps 500` on (FT#1 data + recovery + correction data). Charged only for new steps (~$100); fewer steps → faster turnaround (TODO(event): ask organizers how training time scales). base_share/lr/use_eef inherit from FT#1. |
 | Sun AM | all | FT#2 ready → final per-subtask model selection, harness tuning, many full scored-style runs. Push the leaderboard. |
 
+## Per-subtask tactics (evidence → action)
+| Subtask | Expected difficulty | Tactics |
+|---|---|---|
+| **unplug_usb** | easy-ish: removals ~56% vs installs 16% (REBOOT) | Grasp the plug body, not the cable. Pull straight along the port axis. Don't over-squeeze: the metal-arm-harness notes say the gripper overheats and drops the plug. Low demo budget (~20). Proprio check: gripper not fully closed = holding something. |
+| **open_backing** | hard: Dream-1 open&close 16% zero-shot | Fixed geometry → strongest candidate for `pre:` (canonical grasp pose at the handle/edge) or `mode: replay` if allowed. Consider bimanual: one arm braces the rack, the other opens. Judge: "inside of rack visible". 40 demos, varying only the panel start angle. |
+| **close_backing** | medium | Push from a fixed point until flush, then retract. Replay is likely enough. Judge needs a `scene` note for what "flush/latched" looks like. |
+| **plug_usb** | **hardest, decides the leaderboard** | Keep the plug orientation consistent (USB-A is keyed). Use `pre:` hover ~2 cm in front of the port, then Dream-1 with a short execution horizon (client backend). Recovery = retract, re-align, re-approach; never push through a jam. Gripper-only retry: `recovery: none`, so we don't home and drop the cable. 50–60 demos + 1:1 recovery demos + ~10 precision-phase demos. |
+
 ## Fine-tune gotchas (verified in dreamlabs-client 1.1.3 `facade.py:312-398`)
 - `resume_from` requires the parent model to have used the **constant** LR schedule, with the same lr, batch size and use_eef. **FT#1 must be constant.** The kit's `finetune.py` exposes none of `steps`, `base_share` or `resume_from`. Use **`tools/ft.py`** for those.
 - `steps` must be a multiple of 100 in [500, 2000]. A resumed job is charged only for its new steps.
