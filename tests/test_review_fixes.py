@@ -199,3 +199,23 @@ def test_recover_skips_home_on_409(tmp_path):
     import pytest
     with pytest.raises(urllib.error.HTTPError):
         h.recover({"recovery": "home"})
+
+
+def test_primitive_fast_gripper_close_completes():
+    import numpy as np
+    from hillclimb import primitives
+    z = np.zeros((2, 6))
+    p = primitives.Primitive(fps=30, joints={"left": z, "right": z},
+                             gripper={"left": np.array([1.0, 0.0]), "right": np.array([1.0, 1.0])}, meta={})
+    start = np.r_[np.zeros(6), 1.0, np.zeros(6), 1.0]
+    cmds = primitives.plan(p, start, hz=40)
+    assert abs(cmds[-1][6] - 0.0) < 1e-6 and abs(cmds[-1][13] - 1.0) < 1e-6
+
+
+def test_client_loop_refuses_start_after_arm_fault(tmp_path, monkeypatch):
+    import pytest
+    from hillclimb import client_loop
+    be = client_loop.ClientLoopBackend.__new__(client_loop.ClientLoopBackend)
+    be._arm_fault, be._thread = True, None
+    with pytest.raises(RuntimeError, match="faulted"):
+        be.start("unplug the usb cable from the rack", None)

@@ -100,6 +100,14 @@ def plan(p: Primitive, start: np.ndarray, *, hz: float = 40.0, speed_scale: floa
     for goal in np.concatenate(out):
         cur = np.clip(cur + np.clip(goal - cur, -step, step), lo, hi)
         cmds.append(cur.copy())
+    # 4) settle: the rate limit can leave the end short (e.g. a fast gripper close); keep stepping to the final target
+    #    so a grasp/release actually completes (PR #2 review). Bounded: at most the time a full-range move needs.
+    final = np.clip(traj[-1], lo, hi)
+    for _ in range(int(np.ceil(hz * max(1.0 / MAX_GRIP_PER_S, max_approach_rad / cap))) + 1):
+        if np.allclose(cur, final, atol=1e-6):
+            break
+        cur = np.clip(cur + np.clip(final - cur, -step, step), lo, hi)
+        cmds.append(cur.copy())
     return np.asarray(cmds)
 
 

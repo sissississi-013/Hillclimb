@@ -143,6 +143,8 @@ class ClientLoopBackend:
         return next((s for s in self.cfg.get("subtasks", []) if s.get("prompt") == prompt), None)
 
     def start(self, prompt: str, checkpoint: str | None) -> None:
+        if self._arm_fault:  # retrying over faulted arms would build a new loop on them (PR #2 review)
+            raise RuntimeError("an arm faulted earlier in this session; check the arms, then restart the harness")
         if self._thread is not None and self._thread.is_alive():
             raise RuntimeError("an episode is still running; stop() it first")
         s = client_settings(self.cfg, self._sub(prompt))
@@ -243,6 +245,12 @@ class ClientLoopBackend:
     def close(self) -> None:
         """End of the session: home (live, no arm fault) then switch the arms off, as dreamcli does on exit."""
         self.stop()
+        if self._thread is not None and self._thread.is_alive():
+            # The worker may still be opening/driving the arms: switching them off under it would release the lock
+            # mid-write (PR #2 review). Leave the station to the operator: e-stop, then kill the process.
+            print("client loop: episode thread still alive after stop(); NOT closing the station. PRESS THE E-STOP, "
+                  "then end this process.")
+            return
         try:
             self.home()
         finally:
