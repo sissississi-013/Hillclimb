@@ -44,8 +44,15 @@ Quest: **grip** = drive that arm (works like a clutch: release it, re-center you
 - No hands or people in frame. Don't touch the cameras. Keep force and speed low near the rack.
 - The curator watches the dashboard and keeps a tally per folder: good / recovery / dropped.
 
+## Lessons from REBOOT (arXiv 2609.22591: real bimanual USB-A/USB-C insert and remove, 60 expert + 60 recovery demos per task)
+- **Insertion is the bottleneck:** with 60 expert demos, policies averaged **16% on installs vs 56% on removals**. Removal is mostly a free-space pull from a known grasp. Spend demos on plug_usb, not unplug_usb.
+- **Where installs fail:** at the port. **Align(place)** (connector axis off the port centre) and **Engage(place)** (jams partway in). The fix they demonstrate: **retract, re-align, re-approach**. Never keep pushing on a jam.
+- **USB-A has one valid orientation (C1 symmetry):** keyed connectors fail more at engage. **Grasp the new plug the same way every time, logo/orientation marked.** Ask the organizers whether the new cable's start orientation is fixed.
+- **Diversity recipe:** vary the object's start pose within a **3–6 cm radius** of a nominal pose and keep the goal (port) fixed. That is enough that the policy can't memorise one path, and small enough for ~60 demos to cover.
+- **Recovery ratio:** **1:1 expert : recovery**, with recovery episodes allocated by phase **in proportion to the failures logged in autonomous rollouts** (logs → `tools/report.py`). Record from the start of the subtask, through the induced failure, to success.
+
 ## Budget (slot 1, before FT#1 at ~12:30)
-plug_usb **50** · open_backing **40** · unplug_usb **25** · close_backing **25** · full **5**
+plug_usb **50–60** · open_backing **40** · unplug_usb **20** · close_backing **25** · full **5**
 _(Re-weight from the zero-shot results.)_
 
 ## Slot 2+ (while FT#1 trains → data for FT#2)
