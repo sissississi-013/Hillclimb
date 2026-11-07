@@ -1,6 +1,6 @@
 # Hillclimb PLAYBOOK — how we take 1st
 
-_Living doc. Owner: research/claude-scout. Last update: 2026-11-07 ~04:30 PST. Sources: `docs/research/01–05`._
+_Living doc. Owner: research/claude-scout. Last update: 2026-11-07 ~05:20 PST. Sources: `docs/research/01–05`._
 _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 
 ## TL;DR (read this if nothing else)

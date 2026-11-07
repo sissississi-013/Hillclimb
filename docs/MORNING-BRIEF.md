@@ -9,7 +9,7 @@ The rules and scoring are announced at 09:00. Arms and station booking open at *
 3. **Merge PR #2** (`research/claude-scout` → `main`) once you've skimmed it. Codex review findings are all fixed.
 
 ## The first 3 actions
-1. **09:00:** fill in `context/rules.md` during kickoff and ask the organizer questions (PLAYBOOK § Organizer questions). The most important: are a custom loop, replay and the VLM judge allowed in scored runs? How does training time scale with steps? Are there team credits?
+1. **09:00:** fill in `context/rules.md` during kickoff and ask the organizer questions (PLAYBOOK § Questions for organizers). The most important: are a custom loop, replay and the VLM judge allowed in scored runs? How does training time scale with steps? Are there team credits?
 2. **10:00:** the curator books the earliest station slots, plus Sat evening and Sun 10:00–14:30, and runs `tools/ft.py queue`.
 3. **10:00:** the harness lead follows `docs/RUNBOOK.md` top to bottom: bring-up, zero-shot baseline, prompt search, freeze prompts, then demo sprint 1 from 10:40.
 
