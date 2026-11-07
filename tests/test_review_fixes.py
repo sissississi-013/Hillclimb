@@ -291,3 +291,34 @@ def test_primitive_rejects_start_outside_limits():
     start = np.zeros(14); start[0] = 0.4
     with pytest.raises(ValueError, match="outside"):
         primitives.plan(p, start, hz=40, limits={"left": [[-0.1, 0.2]]})
+
+
+def test_replay_overrun_does_not_burst(monkeypatch):
+    import numpy as np
+    from hillclimb import primitives
+    monkeypatch.setenv("HILLCLIMB_ALLOW_ARMS", "1")
+    t = [0.0]; writes = []
+    state = np.zeros(7); state[6] = 1.0
+
+    class Arm:
+        def read(self):
+            class S: positions_rad = state[:6]; gripper = 1.0
+            return S()
+        def write(self, c): writes.append(t[0])
+        def hold(self): pass
+
+    over = [0.25]  # the first sleep oversleeps by 250 ms
+    def sleep(d):
+        t[0] += max(0.0, d) + (over.pop() if over else 0.0)
+    monkeypatch.setattr(primitives, "_read", lambda arms: (np.r_[state, state], {}))
+    z = np.zeros((10, 6)); z[:, 0] = np.linspace(0, 0.05, 10)
+    p = primitives.Primitive(fps=30, joints={"left": z, "right": np.zeros((10, 6))},
+                             gripper={"left": np.ones(10), "right": np.ones(10)}, meta={})
+    try:
+        primitives.play(p, {"left": Arm(), "right": Arm()}, dry_run=False, hz=40,
+                        command=lambda **k: k, clock=lambda: t[0], sleep=sleep)
+    except Exception:
+        pass  # post-play state checks may complain about the fake arms; spacing is what we test
+    left = writes[::2]
+    gaps = np.diff(left)
+    assert len(gaps) > 5 and gaps.min() >= 1 / 40 - 1e-9

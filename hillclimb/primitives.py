@@ -134,12 +134,17 @@ def play(p: Primitive, arms: dict[str, Any], *, dry_run: bool = True, hz: float 
     if not dry_run:
         if command is None:
             from robots.types import ArmCommand as command  # station only: ~/dream-env
-        t0 = clock()
+        period = 1.0 / hz
+        deadline = clock()
         try:
-            for i, row in enumerate(cmds):
+            for row in cmds:
                 for k, s in enumerate(SIDES):
                     arms[s].write(command(positions_rad=row[7 * k:7 * k + 6].copy(), gripper=float(row[7 * k + 6])))
-                sleep(max(0.0, t0 + (i + 1) / hz - clock()))
+                deadline += period
+                now = clock()
+                if deadline < now:  # an overrun restarts the schedule; never burst overdue rows (PR #2 review)
+                    deadline = now + period
+                sleep(deadline - now)
         finally:
             for s in SIDES:  # hold the last accepted target, as home.py does, even after a fault
                 try:

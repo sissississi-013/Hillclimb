@@ -138,6 +138,7 @@ class ClientLoopBackend:
         self._stop = threading.Event()
         self._state, self.last_error, self.end, self.ticks = "idle", "", "", 0
         self._arm_fault = False
+        self._runs = 0  # rollout episode ordinal
 
     def _sub(self, prompt: str) -> dict[str, Any] | None:
         return next((s for s in self.cfg.get("subtasks", []) if s.get("prompt") == prompt), None)
@@ -171,7 +172,21 @@ class ClientLoopBackend:
             self.end = "stopped"
             return
         client = PrefixPacer(raw, dream_cfg["execution_horizon"], loop_kw["control_hz"], bool(s.get("always_async")))
-        loop = self.station.make_loop(client, prompt, loop_kw)
+        # live runs honour the station's `rollouts:` block, as `dreamcli robot run` does (run.py:140); dry never records
+        make_rec = getattr(self.station, "make_recorder", None)
+        self._runs += 1
+        rec = None if self.dry_run or make_rec is None else make_rec(dream_cfg["checkpoint"], self._runs)
+        try:
+            if rec is None:
+                loop = self.station.make_loop(client, prompt, loop_kw)
+            else:
+                loop = self.station.make_loop(client, prompt, loop_kw, recorder=rec)
+            await self._drive(loop, loop_kw)
+        finally:
+            if rec is not None:
+                await asyncio.to_thread(rec.wait)  # finishes the episode on disk (run.py:189-190)
+
+    async def _drive(self, loop: Any, loop_kw: dict[str, Any]) -> None:
         period = 1.0 / loop_kw["control_hz"]
         async with loop:
             self._state = "running"
@@ -316,11 +331,16 @@ class RobotsStation:
         client.wait_for_ik(run.TRAJ_WARMUP_S)
         return client
 
-    def make_loop(self, client: Any, task: str, settings: dict[str, Any]) -> Any:
+    def make_recorder(self, checkpoint: str, run_number: int) -> Any:
+        """The station's rollout recorder (None when `rollouts.enabled` is off): run.make_recorder."""
+        from robots import run
+        return run.make_recorder(self.app, checkpoint, run_number=run_number)
+
+    def make_loop(self, client: Any, task: str, settings: dict[str, Any], recorder: Any = None) -> Any:
         from robots import control
         return control.ControlLoop(followers=self.arms, cameras=self.readers, client=client, task=task,
                                    kinematics=self.kin, inference_log_path=self.app.inference_log_path,
-                                   camera_owner=False, recorder=None, **settings)
+                                   camera_owner=False, recorder=recorder, **settings)
 
     def home(self) -> bool:
         from robots import home
