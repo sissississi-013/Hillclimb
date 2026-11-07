@@ -55,6 +55,11 @@ Quest: **grip** = drive that arm (works like a clutch: release it, re-center you
 plug_usb **50–60** · open_backing **40** · unplug_usb **20** · close_backing **25** · full **5**
 _(Re-weight from the zero-shot results.)_
 
+**Reality check:** one station, Quest teleop, scene reset between episodes ≈ **1–1.5 min per kept episode**, so 10:40–13:15 yields **~100–150**. Record in priority order so that a cut at any moment leaves a usable dataset:
+1. **Minimum viable FT#1** (~60 eps, ~75 min): plug 25 · open 20 · unplug 8 · close 8. Enough to queue early if the queue is racing (PLAYBOOK § Queue race).
+2. **Then top up:** plug → 50–60, open → 40, close → 25, unplug → 20, full → 5.
+If two stations are booked, run two operators in parallel on different subtasks, each with their own `--dataset-dir`.
+
 ## Slot 2+ (while FT#1 trains → data for FT#2)
 - **Recovery demos from staged failure states**, 5–10 each, using the **same** task string as the subtask:
   - plug resting just off the port → back off 1 cm, realign, insert
