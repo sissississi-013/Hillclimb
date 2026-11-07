@@ -66,13 +66,16 @@ _(Re-weight from the zero-shot results.)_
 - Pull the harness's logged failure states (`runs/`) and recreate the most common ones first.
 
 ## Hand-off to fine-tune (curator)
+Rehearsed offline end to end: `docs/research/09-pipeline-rehearsal.md`. **Never `mv` the -eef folders**: a later `add_eef --replace` then rebuilds beside the source, and the parent silently keeps the old copy (Dream's check still passes).
 ```bash
-# per folder, rebuild with --replace after adding episodes
-~/dream-env/bin/python tools/add_eef.py ~/hackathon_data/hc-plug --arm metal --replace
-# collect all -eef folders under one parent → one multi-task dataset
-mkdir -p ~/hackathon_data/hc-ft1 && mv ~/hackathon_data/hc-*-eef ~/hackathon_data/hc-ft1/   # TODO(event): verify the parent layout works
-~/dream-env/bin/python tools/finetune.py ~/hackathon_data/hc-ft1 --arm metal --check          # free, local
+cd ~/Hillclimb
+# free, local, nothing uploaded: add_eef every hc-* folder into a temp parent + Dream's checks. Run it any time.
+tools/rehearse_pipeline.sh
+# build the REAL parent (one <folder>-eef session per subtask, videos hard-linked). Re-run it after adding episodes:
+# it rebuilds the parent from scratch, so it can never go stale.
+tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft1      # ends with ft.py check: must print PASS
 # PAID ($200 per 1000 steps), cannot be cancelled. Get Sissi's OK + the organizers' credits first.
-# Use OUR launcher (keeps lr_schedule=constant so FT#2 can resume_from FT#1):
-~/dream-env/bin/python ~/Hillclimb/tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000
+# Use OUR launcher (keeps lr_schedule=constant so FT#2 can resume_from FT#1). It re-checks for stale sessions first.
+~/dream-env/bin/python tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000
 ```
+FT#2: `tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft2 --self` (demos + harvested `self/hc-*-self`), then `ft.py launch ~/hackathon_data/hc-ft2 --name hc-ft2 --suffix hc-ft2 --steps 500 --resume-from <FT#1 model>`. Keep recording into the same `hc-<subtask>` folders; never edit `hc-ft1/` (it is the record of what FT#1 trained on).

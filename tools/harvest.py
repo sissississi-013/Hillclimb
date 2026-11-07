@@ -5,7 +5,12 @@ LeRobot v2.1 dataset `~/.dreamlabs/rollouts/<time>_run<N>/` plus `rollout.json` 
 robots/rollouts.py:245-290, rollout_episode.py:118-170). This pairs each harness attempt with its episode, keeps the
 successes (or a human-confirmed list), and writes one new dataset per subtask in dhk-collect's Metal layout:
 
-    python tools/harvest.py logs/harness/2026* --out ~/hackathon_data/self --retime-fps 30 [--confirmed ok.txt] [--trim]
+    ~/dream-env/bin/python tools/harvest.py logs/harness/2026* --out ~/hackathon_data/self --retime-fps 30 \
+        [--confirmed ok.txt] [--trim]
+
+The --out root is NOT a fine-tune parent (it holds harvest.jsonl, which Dream refuses beside sessions). Next:
+`tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft2 --self` adds each hc-*-self folder's add_eef output to
+the FT#2 parent beside the demos (docs/research/09-pipeline-rehearsal.md).
 
 Videos are hard-linked, or remuxed for --trim/--retime-fps (packet copy, no re-encode). See docs/research/06-harvest.md.
 """
@@ -30,6 +35,7 @@ CONFIG = pathlib.Path(__file__).resolve().parents[1] / "hillclimb" / "config.yam
 USABLE_FPS = (30, 15, 10, 5)  # dream shared/datasets/content_checks.py:47; validation refuses any other rate
 SAMPLE_FRAMES = 48  # validation.py: an episode needs 48 * fps // 30 + 1 frames
 KEYFRAME_EVERY = 10  # rollouts.py VIDEO_OPTIONS "g": a head cut must land on a key frame
+KIT_FRAME = [360, 640, 3]  # dhk-collect record_height x record_width (configs/metal.yaml)
 GRIPPERS = [6, 13]  # left_gripper, right_gripper in the 14-wide [left j0-5, grip, right j0-5, grip] vector
 # Station camera name (a serve role, 05 §2) -> the kit embodiment's video key (embodiments/makermods.json).
 VIDEO_KEYS = {r: "observation.images.scene" for r in ("scene", "overhead", "head", "top")}
@@ -134,6 +140,9 @@ def build(prompt: str, episodes: list[dict], out: pathlib.Path, *, grip_scale: f
     cams = {k: v for k, v in ref["features"].items() if v.get("dtype") == "video"}
     # TODO(event): read the station file's camera names; an unknown one keeps its key and validation names it.
     rename = {k: VIDEO_KEYS.get(k.removeprefix("observation.images."), k) for k in cams}
+    if odd := {k: v["shape"] for k, v in cams.items() if v["shape"] != KIT_FRAME}:
+        print(f"WARNING {out.name}: rollout frames {odd} differ from the demos' {KIT_FRAME}; Dream accepts it but "
+              "the model sees two aspect ratios. Set the station cameras to 16:9 (06-harvest.md)")
     out.mkdir(parents=True)
     report, lengths, ep_stats, total = [], [], [], 0
     for ep in episodes:
@@ -242,6 +251,8 @@ def main(argv: list[str] | None = None) -> int:
         built = build(prompt, keep, target, grip_scale=args.grip_scale, trim=args.trim, retime_fps=args.retime_fps)
         log += [{"rollout": str(ep["path"]), "subtask": name, "episode": i, "build": why} for ep, i, why in built]
         print(f"{name}: {sum(i is not None for _, i, _ in built)} episodes -> {target if target.exists() else '-'}")
+        if not target.exists() and args.replace:
+            print(f"  (no episodes kept: remove any stale {target.name}-eef from the FT parent)")
     (args.out / "harvest.jsonl").write_text("".join(json.dumps(x) + "\n" for x in log))
     return 0
 

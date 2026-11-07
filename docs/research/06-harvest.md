@@ -22,10 +22,12 @@ _Read on 2026-11-07 from the source alone. Nothing vendor was imported or execut
 
 ```bash
 # station, after a harness session with rollouts on (and control_hz: 30, see below)
-~/Hillclimb/.venv/bin/python ~/Hillclimb/tools/harvest.py logs/harness/20261107-* --out ~/hackathon_data/self
+cd ~/Hillclimb   # the harness writes logs/harness/ here; the station has no .venv, harvest runs in ~/dream-env
+~/dream-env/bin/python tools/harvest.py logs/harness/20261107-* --out ~/hackathon_data/self
 #   20 Hz station instead: add --retime-fps 30        cut idle head/tail: add --trim
 #   curator-reviewed only: --confirmed ok.txt         rebuild: --replace
-~/dream-env/bin/python tools/add_eef.py ~/hackathon_data/self/hc-plug-usb-self --arm metal   # then into the FT#2 parent
+# FT#2 parent = the demos + every self/hc-*-self, each through add_eef, then ft.py check (rehearsed: 09-pipeline-rehearsal.md)
+tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft2 --self
 ```
 `--trim` cuts frames at the start and end where the command stays within 0.01 of the first or last command, with a 5-frame margin. The head is floored to a key frame (rollout VP9 uses `g=10`). The videos are remuxed by packet copy (PyAV), **never re-encoded**. This is valid because the writer emits no B-frames (R/rollouts.py:44-55, rollout_episode.py:213). The image stats are copied from the untrimmed episode.
 
@@ -51,5 +53,5 @@ _Read on 2026-11-07 from the source alone. Nothing vendor was imported or execut
 - **Judge false positives become training data.** Use `--confirmed` (curator playback) for anything going into a paid FT.
 - **Clocks:** pairing assumes the harness and the station share a clock. Run the harness on the station box (05 §6 already requires that), or widen `--slack-s`.
 - **Disk:** a run refuses to start with <2 GB free in the rollouts dir (R/rollouts.py:35). Hard links share the videos, so do not edit the source videos afterwards.
-- **The harvest output is a separate session folder** per subtask. Put it beside the human `hc-plug-eef` etc. under the FT#2 parent. Every session in that parent must have the same fps (see the blocker above).
-- **Untested on real rollouts:** the tests use synthetic folders, plus one real VP9/MP4 written with the rollout writer's options. Before an FT, run `add_eef.py` on one harvested folder, then `tools/ft.py check` (free).
+- **The harvest output is a separate session folder** per subtask. Its add_eef output goes beside the human `hc-plug-eef` etc. under the FT#2 parent. Every session in that parent must have the same fps (see the blocker above). The `--out` root itself is **not** a parent: Dream refuses its `harvest.jsonl` ("not inside a session folder").
+- **Rehearsed offline (09-pipeline-rehearsal.md):** episodes written by the real `robots.rollouts.Recorder` (dreamlabs 1.0.37, 20 Hz and 30 Hz) went through harvest (`--retime-fps 30`, `--trim`), add_eef and Dream's checks together with kit-written demos. All pass. Still untested: real cameras, and real joint frames vs the demos (the TODO above).

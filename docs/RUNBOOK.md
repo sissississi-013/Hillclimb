@@ -45,13 +45,15 @@ Follow `docs/DEMO-PROTOCOL.md`. Order: **plug_usb → open_backing → unplug_us
 - [ ] Set `rollouts: {enabled: true}` in `~/.dreamlabs/station.yaml` (if the organizers allow it) so every policy run from now on is logged for `tools/harvest.py`.
 
 ## ~12:30 — queue FT#1 (curator + Sissi's OK)
+Rehearsed offline: `docs/research/09-pipeline-rehearsal.md`. Do a free dry run at ~12:00 (`tools/rehearse_pipeline.sh`, no args) so a surprise costs nothing.
 ```bash
-cd ~/physical-ai-hacks
-for t in plug open unplug close full; do ~/dream-env/bin/python tools/add_eef.py ~/hackathon_data/hc-$t --arm metal --replace; done
-mkdir -p ~/hackathon_data/hc-ft1 && mv ~/hackathon_data/hc-*-eef ~/hackathon_data/hc-ft1/
-~/dream-env/bin/python ~/Hillclimb/tools/ft.py check ~/hackathon_data/hc-ft1
-~/dream-env/bin/python ~/Hillclimb/tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000   # constant LR, paid
+cd ~/Hillclimb
+# kit not at ~/physical-ai-hacks or ~/physical-ai-hack-2026? export HC_KIT=<kit checkout> first
+tools/rehearse_pipeline.sh --parent ~/hackathon_data/hc-ft1     # add_eef x5 -> hc-ft1/hc-<t>-eef, then ft.py check. Must print PASS
+~/dream-env/bin/python tools/ft.py launch ~/hackathon_data/hc-ft1 --name hc-ft1 --suffix hc-ft1 --steps 1000   # constant LR, PAID
 ```
+- [ ] `ft.py check` lists every session with its episode count and task text: compare with the curator's tally. Any `ERROR:` line (raw 14-wide folder, STALE copy, a file beside the sessions) blocks the upload.
+- [ ] Do NOT `mv ~/hackathon_data/hc-*-eef` into the parent (the old instruction). It validates, but after the next `add_eef --replace` the parent keeps the old copy (silently trains on old data), and the next `mv` fails with "Directory not empty".
 Post the job id on issue #1. **When the model lands:** `tools/ft.py prompts <model>` and check that every `hillclimb/config.yaml` prompt appears there verbatim. A prompt that doesn't match is one the fine-tune never learned (`dream/trained_inputs.py`). While it trains: harness tuning on the base model, recovery demos, harvesting (PLAYBOOK § Our edge).
 
 ## Replay primitive how-to (only if the rules allow; PLAYBOOK § Replay primitives)
