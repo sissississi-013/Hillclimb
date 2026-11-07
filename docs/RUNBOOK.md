@@ -14,10 +14,10 @@ Safety: everything that moves an arm is run by a **human with a hand on the e-st
 ## 10:00 — station bring-up (harness lead)
 ```bash
 # laptop
-ssh -L 8080:localhost:8080 <user>@<station>
+ssh -L 8080:localhost:8080 pah@<station-ip>     # account is always pah; IP + password from organizers
 # station
 tmux new -A -s hc
-git clone https://github.com/sissississi-013/Hillclimb ~/Hillclimb   # private: use a PAT or scp a tarball:  (laptop) git archive HEAD | ssh <user>@<station> 'mkdir -p ~/Hillclimb && tar -x -C ~/Hillclimb'
+git clone https://github.com/sissississi-013/Hillclimb ~/Hillclimb   # private: use a PAT or scp a tarball:  (laptop) git archive HEAD | ssh pah@<station-ip> 'mkdir -p ~/Hillclimb && tar -x -C ~/Hillclimb'
 cd ~/Hillclimb && ~/dream-env/bin/python -m pip install pyyaml numpy pyarrow pytest   # harness runs in the Dream env (needs `dream`, `robots`)
 echo "FIREWORKS_API_KEY=..." > .env && chmod 600 .env                        # never commit. The harness loads it; other tools: set -a; . ./.env; set +a
 ~/dream-env/bin/python -m pytest -q                                           # all green, no hardware

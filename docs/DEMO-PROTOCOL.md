@@ -15,10 +15,10 @@ _TODO(event): if the rules' wording or the prompt search (`docs/PROMPTS.md`, 10:
 
 ```bash
 # laptop
-ssh -L 8080:localhost:8080 <user>@<station>
+ssh -L 8080:localhost:8080 pah@<station-ip>     # account is always pah; IP + password from organizers
 # station
 tmux new -A -s collect
-cd ~/physical-ai-hacks        # or ~/physical-ai-hack-2026: wherever the kit is checked out
+cd ~/physical-ai-hacks        # the kit on every station (kit README a41bcc3)
 uv run dhk-collect --config configs/station.yaml --dataset-dir ~/hackathon_data/hc-plug --task "plug the new usb cable into the rack"
 ```
 Quest: **grip** = drive that arm (works like a clutch: release it, re-center your hand, grip again) · **trigger** = close gripper · **A** = start/save · **B** = discard · **right stick click** = arms back to start (not while recording). Keep your head still and facing the arms.
