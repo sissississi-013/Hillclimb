@@ -4,6 +4,7 @@ Team repo for the **MakerMods Physical AI Hackathon — Hill Climb track** (Nov 
 Goal: **1st on the leaderboard.**
 
 ## Start here (humans and agents), in this order
+0. `docs/MORNING-BRIEF.md`: a 2-minute summary, the decisions only Sissi makes, and the first 3 actions
 1. `docs/PLAYBOOK.md` — **the plan**: TL;DR, timeline, fine-tune gotchas, harness, our edge, organizer questions
 2. `docs/RUNBOOK.md` — exact commands from bring-up (10:00) to queueing FT#1 (≤13:30)
 3. `docs/DEMO-PROTOCOL.md` — operator card: frozen task strings, Quest controls, demo budget, recovery demos
