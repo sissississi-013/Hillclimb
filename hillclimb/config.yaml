@@ -10,6 +10,7 @@ total_time_s: 600                       # TODO(event): scored-attempt time limit
 judge:   # measured on REBOOT26 frames in docs/research/07-judge-eval.md; rerun tools/judge_eval.py on our rig
   model: accounts/fireworks/models/qwen3p8-max   # fallback: accounts/fireworks/models/kimi-k3 (untested beyond 1 call)
   threshold: 0.7
+  mode: vlm               # vlm | confirm (operator Enter/y/n at the end of each attempt) | human (no network)
   reasoning_effort: none  # REQUIRED for qwen3p8-max: with thinking on, 400 tokens went to reasoning and every
                           # verdict was "unknown". null = omit the field (glm-5p3-flash rejects "none" with HTTP 400)
   max_tokens: 800
