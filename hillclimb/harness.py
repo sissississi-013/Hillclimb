@@ -25,6 +25,7 @@ HILLCLIMB_ALLOW_ARMS=1 python -m hillclimb.harness ... --backend client --client
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import dataclasses
 import datetime
 import json
@@ -104,22 +105,31 @@ class Harness:
         try:  # any exception (HTTP error, judge crash, Ctrl-C) must still stop the run: the station runs until told
             self.backend.start(sub["prompt"], checkpoint)
             t0 = next_check = self.clock()
-            end, early = "timeout", None
-            while (elapsed := self.clock() - t0) < max_time:
-                state = self.backend.state()
-                if state in ("idle", "error") and elapsed > 1.0:
-                    end = "run_ended" if state == "idle" else "run_error"
-                    break
-                if every and not getattr(self.judge, "final_only", False) and self.clock() >= next_check + every:
-                    next_check = self.clock()
-                    # Only this attempt's frames: until the loop opens its trace, the folder holds the LAST run's.
-                    frames = _fresh(self.backend.latest_frames(), start_wall)
-                    if frames:
-                        v = getattr(self.judge, "midrun_judge", self.judge)(sub, frames, {})
-                        if v.success:
+            end, early, pending = "timeout", None, None
+            # Mid-run verdicts run on a worker thread, so a slow or dead judge never delays the stop (PR #2 review).
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="midrun-judge")
+            try:
+                while (elapsed := self.clock() - t0) < max_time:
+                    state = self.backend.state()
+                    if state in ("idle", "error") and elapsed > 1.0:
+                        end = "run_ended" if state == "idle" else "run_error"
+                        break
+                    if pending is not None and pending.done():
+                        v = pending.exception() is None and pending.result()
+                        pending = None
+                        if v and v.success:
                             end, early = "early_success", v
                             break
-                self.sleep(self.cfg.get("poll_s", 0.5))
+                    if (every and pending is None and not getattr(self.judge, "final_only", False)
+                            and self.clock() >= next_check + every):
+                        next_check = self.clock()
+                        # Only this attempt's frames: until the loop opens its trace, the folder holds the LAST run's.
+                        frames = _fresh(self.backend.latest_frames(), start_wall)
+                        if frames:
+                            pending = pool.submit(getattr(self.judge, "midrun_judge", self.judge), sub, frames, {})
+                    self.sleep(self.cfg.get("poll_s", 0.5))
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)  # an in-flight verdict is abandoned, never awaited
         except BaseException:
             _stop_quietly(self.backend)
             raise

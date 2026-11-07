@@ -322,3 +322,35 @@ def test_replay_overrun_does_not_burst(monkeypatch):
     left = writes[::2]
     gaps = np.diff(left)
     assert len(gaps) > 5 and gaps.min() >= 1 / 40 - 1e-9
+
+
+def test_slow_midrun_judge_cannot_extend_the_run(tmp_path, monkeypatch):
+    import threading
+    import yaml
+    from hillclimb import backends, harness
+    from hillclimb.judge import Verdict
+    from tests.test_harness import CONFIG, Clock
+
+    gate, called = threading.Event(), threading.Event()
+
+    class Hanging:
+        def __call__(self, sub, frames, proprio):
+            if not proprio:  # mid-run: hang like a dead API
+                called.set()
+                gate.wait(5)
+                return Verdict(True, 1.0, "late", "test")
+            return Verdict(False, 0.0, "final", "test")
+
+    cfg = yaml.safe_load(CONFIG.read_text())
+    cfg["subtasks"] = [dict(cfg["subtasks"][0], max_time_s=5, check_every_s=1, max_attempts=1)]
+    clock = Clock()
+    be = backends.FakeBackend(clock=clock, run_s=60.0)
+    monkeypatch.setattr(be, "latest_frames", lambda: {"overhead": "x.jpg"}, raising=False)
+    monkeypatch.setattr(harness, "_fresh", lambda frames, since: frames)
+    h = harness.Harness(cfg, be, Hanging(), tmp_path, clock=clock, sleep=clock.sleep)
+    try:
+        a = h.run_attempt(0, cfg["subtasks"][0], 1)
+    finally:
+        gate.set()
+    assert called.is_set()
+    assert a.end == "timeout" and a.elapsed_s <= 6
