@@ -1,0 +1,53 @@
+# Hill Climb rack task. One Dream episode per subtask. Prompts are frozen: if a fine-tune was recorded with
+# --task text, use that exact text here (docs/running_your_model.md:22).
+# MUST match docs/DEMO-PROTOCOL.md task strings verbatim (tests/test_harness.py checks this).
+station_url: http://127.0.0.1:8091     # `dreamcli robot up` API (robots/station.py:97). Station-local only.
+checkpoint: null                        # null = the station file's model. TODO(event): base id from get_models(), else dream-1-ft:...
+poll_s: 0.5
+total_time_s: 600                       # TODO(event): scored-attempt time limit from the rules
+
+judge:
+  model: accounts/fireworks/models/qwen3p8-max   # fallback: accounts/fireworks/models/kimi-k3
+  threshold: 0.7
+
+defaults:
+  max_time_s: 30          # data_collection.md: demos are 10-30 s, so a run much longer than that has gone wrong
+  check_every_s: 4        # mid-run VLM check on the newest frame (0 = off)
+  max_attempts: 3
+  recovery: home          # home | none
+  on_fail: abort          # abort | continue
+  # Execution horizon is NOT a knob of this backend. dreamcli/station never set it, so it is the client default of
+  # 30 rows = 1.5 s at 20 Hz (dream/pacing.py:49, robots/run.py:421-515). A per-subtask horizon needs our own
+  # DreamClient loop (policy({"execution_horizon": N})). TODO(event).
+
+subtasks:
+  - name: unplug_usb
+    prompt: "unplug the usb cable from the rack"
+    max_time_s: 25
+    proprio: {expect_holding: true}      # the pulled cable should still be in a gripper
+    rubric:
+      success: "the USB plug is fully out of the rack port and is held by a gripper or lies clear of the rack"
+      failure: "plug still in the port, or only partly out; gripper empty next to the port"
+  - name: open_backing
+    prompt: "open the rack back panel"
+    max_time_s: 30
+    proprio: {expect_holding: null}
+    rubric:
+      success: "the rack backing/panel is clearly open, with the inside of the rack visible"
+      failure: "panel still closed or only ajar; panel knocked off or dropped"
+  - name: close_backing
+    prompt: "close the rack back panel"
+    max_time_s: 30
+    proprio: {expect_holding: false}
+    rubric:
+      success: "the rack backing/panel is fully closed and flush, with no gap"
+      failure: "panel still open or ajar; gripper still pushing it"
+  - name: plug_usb
+    prompt: "plug the new usb cable into the rack"
+    max_time_s: 40
+    recovery: none          # homing opens the grippers and drops the cable
+    max_attempts: 4
+    proprio: {expect_holding: null}
+    rubric:
+      success: "a USB plug is fully seated in the rack port with no metal visible, and the gripper has released it or is about to"
+      failure: "plug beside the port, at an angle, or partly inserted; cable dropped"
