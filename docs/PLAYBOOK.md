@@ -16,12 +16,18 @@ _If you change the plan, post `PLAN-CHANGE:` on issue #1._
 |---|---|---|
 | 08:00–09:00 | everyone | Get the rules (see questions below). SSH into the station, `--dry-run`, read `dreamcli` zero-shot on each subtask. **Measure the zero-shot baseline per subtask** (5 tries each). |
 | 09:00–12:30 | 2 operators + 1 curator | **Data sprint 1**: ~40–60 demos for plug_usb, ~40 for open_backing, ~25 each for unplug/close, + ~5 full runs. The curator watches dashboard playback live and drops bad episodes. |
-| 12:30–13:00 | curator | `add_eef.py --arm metal` per folder → parent folder → `finetune.py --check` → **queue FT#1** (confirm credits with organizers and Sissi first). Settings: 1000 steps, `lr_schedule cosine`, `base_share 0.5`. |
+| 12:30–13:00 | curator | `add_eef.py --arm metal` per folder → parent folder → `finetune.py --check` → **queue FT#1** (confirm credits with organizers and Sissi first). Settings: `tools/ft.py launch ... --steps 1000` → **`lr_schedule constant` (NOT cosine — cosine models cannot be resumed)**, `base_share 0.5`. |
 | 13:00–22:00 | harness team | Build and tune the harness on the **base** model: success judge, retries, recovery, IK safety boxes, execution horizon per subtask. Log every failure state. |
 | 13:00–22:00 | operators | **Recovery-data sprint**: start demos from the logged failure states (cable dropped, plug misaligned, panel half-open). Add more plug_usb demos with varied cable start poses. |
 | ~22:00 | all | FT#1 ready → A/B against base on each subtask (≥10 tries each). Pick per-subtask which model to use (policy escalation). |
-| ~23:00 | curator | **Queue FT#2** = `resume_from` FT#1 + recovery + correction data. Consider `base_share 0.0`. |
+| ~23:00 | curator | **Queue FT#2** = `tools/ft.py launch hc-ft2 --resume-from <FT#1> --steps 500` on (FT#1 data + recovery + correction data). Charged only for new steps (~$100); fewer steps → faster turnaround (TODO(event): ask organizers how training time scales). base_share/lr/use_eef inherit from FT#1. |
 | Sun AM | all | FT#2 ready → final per-subtask model selection, harness tuning, many full scored-style runs. Push the leaderboard. |
+
+## Fine-tune gotchas (verified in dreamlabs-client 1.1.3 `facade.py:312-398`)
+- `resume_from` requires the parent model to have used the **constant** LR schedule, with the same lr, batch size and use_eef. **FT#1 must be constant.** The kit's `finetune.py` exposes none of `steps`, `base_share` or `resume_from`. Use **`tools/ft.py`** for those.
+- `steps` must be a multiple of 100 in [500, 2000]. A resumed job is charged only for its new steps.
+- `base_share`: 0.5 (default) or 0.0. A resumed job inherits its parent's value.
+- The account has a limit on active jobs (`conflict`). Ask the organizers whether 2 can run in parallel. If so, launch FT#1a (base_share 0.5) and FT#1b (0.0) together, or one plug-only specialist.
 
 ## The harness (System 2)
 ```
